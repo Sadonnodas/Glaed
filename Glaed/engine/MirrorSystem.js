@@ -10,6 +10,7 @@ class MirrorSystem {
         if (this.intervalId) return;
         const interval = 1000 / this.frequency;
         this.intervalId = setInterval(() => {
+            if (!this.dirty) return;
             if (this.onTick) this.onTick();
             this.dirty = false;
         }, interval);

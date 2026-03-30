@@ -2,9 +2,13 @@ class CueList {
     constructor() {
         this.cues = [];
         this.currentIndex = -1;
+        this.playing = false;
+        this.timelineMode = false;
         this.onCueChange = null;
         this.onFollow = null; // callback for auto-follow
         this.followTimer = null;
+        this.timelineStart = null;
+        this.timelineFrame = null;
     }
 
     addCue(cue) {
@@ -24,6 +28,93 @@ class CueList {
 
     getCurrentCue() {
         return this.cues[this.currentIndex] || null;
+    }
+
+    play() {
+        if (this.cues.length === 0) return;
+        if (this.timelineMode) {
+            this.startTimelinePlayback();
+            return;
+        }
+
+        this.playing = true;
+        if (this.currentIndex < 0 || this.currentIndex >= this.cues.length) {
+            this.currentIndex = 0;
+        }
+        this._emitCurrent();
+    }
+
+    startTimelinePlayback() {
+        this.playing = true;
+        this.timelineStart = Date.now();
+        this.timelineFrame = requestAnimationFrame(() => this.updateTimelinePlayback());
+    }
+
+    updateTimelinePlayback() {
+        if (!this.playing) return;
+        const elapsed = (Date.now() - this.timelineStart) / 1000;
+
+        const activeIndex = this.cues.findIndex(cue => {
+            const start = Number(cue.startTime || 0);
+            const duration = Number(cue.duration || cue.fadeIn || 1);
+            return elapsed >= start && elapsed < start + duration;
+        });
+
+        if (activeIndex === -1 && elapsed > this.getTotalDuration()) {
+            this.stop();
+            return;
+        }
+
+        if (activeIndex !== -1 && activeIndex !== this.currentIndex) {
+            this.currentIndex = activeIndex;
+            this._emitCurrent();
+        }
+
+        if (this.timelineFrame) {
+            cancelAnimationFrame(this.timelineFrame);
+        }
+        this.timelineFrame = requestAnimationFrame(() => this.updateTimelinePlayback());
+    }
+
+    pause() {
+        this.playing = false;
+        if (this.followTimer) {
+            clearTimeout(this.followTimer);
+            this.followTimer = null;
+        }
+        if (this.timelineFrame) {
+            cancelAnimationFrame(this.timelineFrame);
+            this.timelineFrame = null;
+        }
+    }
+
+    stop() {
+        this.playing = false;
+        if (this.followTimer) {
+            clearTimeout(this.followTimer);
+            this.followTimer = null;
+        }
+        if (this.timelineFrame) {
+            cancelAnimationFrame(this.timelineFrame);
+            this.timelineFrame = null;
+        }
+        this.currentIndex = -1;
+        if (this.onCueChange) {
+            this.onCueChange(null);
+        }
+    }
+
+    getTotalDuration() {
+        if (this.cues.length === 0) return 0;
+        return this.cues.reduce((max, cue) => {
+            const start = Number(cue.startTime || 0);
+            const dur = Number(cue.duration || cue.fadeIn || 1);
+            return Math.max(max, start + dur);
+        }, 0);
+    }
+
+    setTimelineMode(enabled) {
+        this.timelineMode = !!enabled;
     }
 
     go(index = null) {
@@ -54,7 +145,7 @@ class CueList {
             this.onCueChange(cue);
         }
 
-        if (cue && cue.follow) {
+        if (this.playing && cue && cue.follow) {
             const followTime = Number(cue.followTime) || 0;
             if (followTime >= 0) {
                 this.followTimer = setTimeout(() => {

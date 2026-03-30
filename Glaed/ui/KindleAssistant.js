@@ -49,9 +49,9 @@ class KindleAssistant {
 
         const cue = {
             id: cueId,
-            name: `AI ${prompt.slice(0, 18)}...`,
-            fadeIn: 1.2,
-            fadeOut: 0.8,
+            name: `AI: ${prompt.slice(0, 20)}...`,
+            fadeIn: 1.5,
+            fadeOut: 0,
             delay: 0,
             follow: false,
             data: {
@@ -61,10 +61,7 @@ class KindleAssistant {
         };
 
         this.cueList.addCue(cue);
-        this.setStatus(`Cue generated: ${cue.name}`);
-
-        if (this.onCueGenerated) {
-            this.onCueGenerated(cue);
-        }
+        this.setStatus(`Generated cue: ${cue.name}`);
+        if (this.onCueGenerated) this.onCueGenerated(cue);
     }
 }

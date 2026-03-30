@@ -1,0 +1,28 @@
+{
+  "name": "Generic Moving Head",
+  "manufacturer": "Generic",
+  "modes": [
+    {
+      "name": "16ch",
+      "channels": [
+        { "offset": 0,  "name": "Pan",        "type": "pan",       "range": [0, 540] },
+        { "offset": 1,  "name": "Pan Fine",    "type": "pan_fine" },
+        { "offset": 2,  "name": "Tilt",        "type": "tilt",      "range": [0, 270] },
+        { "offset": 3,  "name": "Tilt Fine",   "type": "tilt_fine" },
+        { "offset": 4,  "name": "Dimmer",      "type": "intensity" },
+        { "offset": 5,  "name": "Red",         "type": "red" },
+        { "offset": 6,  "name": "Green",       "type": "green" },
+        { "offset": 7,  "name": "Blue",        "type": "blue" },
+        { "offset": 8,  "name": "Gobo",        "type": "gobo",
+          "values": [
+            { "dmx": [0,  9],  "name": "Open" },
+            { "dmx": [10, 19], "name": "Gobo 1" },
+            { "dmx": [20, 29], "name": "Gobo 2" }
+          ]
+        },
+        { "offset": 9,  "name": "Strobe",      "type": "strobe" },
+        { "offset": 10, "name": "Speed",       "type": "pan_tilt_speed" }
+      ]
+    }
+  ]
+}

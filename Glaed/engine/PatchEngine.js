@@ -16,6 +16,25 @@ class PatchEngine {
             throw new Error(`Invalid DMX address: ${address}. Must be between 1 and 512.`);
         }
 
+        const channelCount = fixture.channels ? fixture.channels.length : 1;
+        const endAddress = address + channelCount - 1;
+
+        if (endAddress > 512) {
+            throw new Error(`Fixture ${fixture.name} exceeds universe range: ${endAddress} > 512.`);
+        }
+
+        // collision check inside the same universe
+        const existing = this.getFixturesByUniverse(universe);
+        for (const fx of existing) {
+            const fxStart = fx.address;
+            const fxCount = fx.channels ? fx.channels.length : 1;
+            const fxEnd = fxStart + fxCount - 1;
+
+            if (address <= fxEnd && endAddress >= fxStart) {
+                throw new Error(`DMX overlap: ${fixture.name} (${address}-${endAddress}) overlaps ${fx.name} (${fxStart}-${fxEnd}) in universe ${universe}.`);
+            }
+        }
+
         fixture.universe = universe;
         fixture.address = address;
 
@@ -25,7 +44,7 @@ class PatchEngine {
             this.universes[universe] = new Array(512).fill(0);
         }
 
-        console.log(`Patched ${fixture.name} to Universe ${universe}, Address ${address}`);
+        console.log(`Patched ${fixture.name} to Universe ${universe}, Address ${address} (channels ${channelCount})`);
     }
 
     /**

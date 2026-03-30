@@ -42,7 +42,10 @@ class WashLight extends _BaseFixture {
 
         // Add a "lens" to show the light color
         const lensGeometry = new THREE.CircleGeometry(0.4, 32);
-        const lensMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const lensMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x000000,
+            emissive: 0x000000
+        });
         const lens = new THREE.Mesh(lensGeometry, lensMaterial);
         lens.position.set(0, 0.11, 0);
         lens.rotation.x = -Math.PI / 2;

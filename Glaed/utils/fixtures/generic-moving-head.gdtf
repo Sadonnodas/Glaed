@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GDTF DataVersion="1.0" xmlns="http://www.gdtf-share.com">
+  <FixtureType Name="Generic Moving Head" Manufacturer="Generic" Description="Basic moving head">
+    <DMXModes>
+      <DMXMode Name="16ch">
+        <DMXChannels>
+          <DMXChannel Name="Pan" DMXBreak="0" />
+          <DMXChannel Name="Pan Fine" DMXBreak="1" />
+          <DMXChannel Name="Tilt" DMXBreak="2" />
+          <DMXChannel Name="Tilt Fine" DMXBreak="3" />
+          <DMXChannel Name="Dimmer" DMXBreak="4" />
+          <DMXChannel Name="Red" DMXBreak="5" />
+          <DMXChannel Name="Green" DMXBreak="6" />
+          <DMXChannel Name="Blue" DMXBreak="7" />
+          <DMXChannel Name="Gobo" DMXBreak="8" />
+          <DMXChannel Name="Strobe" DMXBreak="9" />
+          <DMXChannel Name="Speed" DMXBreak="10" />
+        </DMXChannels>
+      </DMXMode>
+    </DMXModes>
+  </FixtureType>
+</GDTF>

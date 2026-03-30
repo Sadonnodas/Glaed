@@ -40,15 +40,53 @@ class ProfileParser {
         return parsed;
     }
 
-    static applyToFixture(fixture, parsedProfile) {
-        if (!fixture || !parsedProfile) {
-            throw new Error('Invalid fixture or profile');
-        }
+    static parseGDTF(xmlString) {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
 
-        fixture.channels = parsedProfile.channels || fixture.channels;
-        fixture.channelMap = parsedProfile.channelMap || fixture.channelMap;
+        const fixtureType = xmlDoc.querySelector('FixtureType');
+        if (!fixtureType) throw new Error('Invalid GDTF: no FixtureType');
 
-        if (parsedProfile.name) fixture.name = parsedProfile.name;
-        if (parsedProfile.manufacturer) fixture.manufacturer = parsedProfile.manufacturer;
+        const name = fixtureType.getAttribute('Name') || 'Unnamed';
+        const manufacturer = fixtureType.getAttribute('Manufacturer') || 'Generic';
+
+        const dmxModes = xmlDoc.querySelectorAll('DMXMode');
+        if (dmxModes.length === 0) throw new Error('No DMX modes found');
+
+        const mode = dmxModes[0]; // Take first mode
+        const modeName = mode.getAttribute('Name') || 'Default';
+
+        const channels = [];
+        const channelMap = {};
+
+        const dmxChannels = mode.querySelectorAll('DMXChannel');
+        dmxChannels.forEach((ch, index) => {
+            const chName = ch.getAttribute('Name') || `Ch${index}`;
+            const geometry = ch.getAttribute('Geometry') || '';
+            const offset = parseInt(ch.getAttribute('DMXBreak') || '0', 10) + index; // Simplified
+
+            let type = 'unknown';
+            // Basic type detection from name or LogicalChannel
+            if (chName.toLowerCase().includes('dimmer') || chName.toLowerCase().includes('intensity')) type = 'intensity';
+            else if (chName.toLowerCase().includes('red')) type = 'red';
+            else if (chName.toLowerCase().includes('green')) type = 'green';
+            else if (chName.toLowerCase().includes('blue')) type = 'blue';
+            else if (chName.toLowerCase().includes('white')) type = 'white';
+            else if (chName.toLowerCase().includes('amber')) type = 'amber';
+            else if (chName.toLowerCase().includes('uv')) type = 'uv';
+            else if (chName.toLowerCase().includes('pan')) type = 'pan';
+            else if (chName.toLowerCase().includes('tilt')) type = 'tilt';
+
+            channels.push({ offset, name: chName, type });
+            channelMap[type] = offset + 1; // 1-based
+        });
+
+        return {
+            name,
+            manufacturer,
+            modes: [{ name: modeName, channels }],
+            channels,
+            channelMap
+        };
     }
 }

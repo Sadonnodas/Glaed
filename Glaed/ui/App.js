@@ -13,8 +13,8 @@ class App {
         this.inspectorPanel = null;
         this.transportStatusEl = null;
         this.timecodeStatusEl = null;
-        this.mode = 'live';
-        this.mirrorEnabled = true;
+        this.showTimerEl = null;
+        this.playStartTime = null;
         
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
@@ -33,8 +33,20 @@ class App {
         this.groupManager = new GroupManager();
         this.paletteManager = new PaletteManager();
         this.timecodeReceiver = new TimecodeReceiver();
+        this.midiBridge = new MidiBridge((tc) => {
+            this.setTimecodeStatus(`MTC: ${String(tc.hours).padStart(2,'0')}:${String(tc.minutes).padStart(2,'0')}:${String(tc.seconds).padStart(2,'0')}:${String(tc.frames).padStart(2,'0')}`);
+            if (this.mode === 'playback') {
+                const idx = Math.floor(tc.totalSeconds / 4) % this.cueList.cues.length;
+                if (idx !== this.cueList.currentIndex) {
+                    this.cueList.go(idx);
+                }
+            }
+        });
         this.mirrorSystem = new MirrorSystem(() => {
             this.fadeEngine.update(1 / 40); // 40 Hz simulation
+            if (this.fadeEngine.active) {
+                this.mirrorSystem.markDirty();
+            }
             this.sendDmx();
         });
 
@@ -42,6 +54,7 @@ class App {
             if (cue) {
                 console.log('Cue fired:', cue.name || cue.id);
                 this.fadeEngine.startCue(cue, this.patchEngine);
+                if (this.mirrorSystem) this.mirrorSystem.markDirty();
             }
             if (this.timelinePanel) {
                 this.timelinePanel.render();
@@ -52,6 +65,7 @@ class App {
             if (cue) {
                 console.log('Auto-following cue:', cue.name || cue.id);
                 this.setTransportStatus(`Auto-follow cue: ${cue.name || cue.id}`);
+                if (this.mirrorSystem) this.mirrorSystem.markDirty();
             }
         };
 
@@ -142,8 +156,16 @@ class App {
             console.error('Could not find #kindle-assistant container for KindleAssistant.');
         }
 
+        const fixtureLibraryContainer = document.getElementById('fixture-library-panel');
+        if (fixtureLibraryContainer) {
+            this.fixtureLibraryPanel = new FixtureLibraryPanel(fixtureLibraryContainer, this.patchEngine, this);
+        } else {
+            console.error('Could not find #fixture-library-panel container for FixtureLibraryPanel.');
+        }
+
         this.transportStatusEl = document.getElementById('transport-status');
         this.timecodeStatusEl = document.getElementById('timecode-status');
+        this.showTimerEl = document.getElementById('show-timer');
         this.setupTransportControls();
 
         // 3. Hardware
@@ -161,15 +183,22 @@ class App {
         // 4. Test Patch
         this.createTestPatch();
         
-        // Link programmer updates to redrawing the stage
+        // Link programmer updates to redrawing the stage and marking mirror dirty
         this.programmer.onUpdate = () => {
             this.patchEngine.getAllFixtures().forEach(f => f.updateThreeObject());
+            if (this.mirrorSystem) this.mirrorSystem.markDirty();
         };
     }
 
     setupTransportControls() {
         const goBtn = document.getElementById('btn-go');
         const backBtn = document.getElementById('btn-back');
+        const playBtn = document.getElementById('btn-play');
+        const pauseBtn = document.getElementById('btn-pause');
+        const stopBtn = document.getElementById('btn-stop');
+        const saveBtn = document.getElementById('btn-save');
+        const loadBtn = document.getElementById('btn-load');
+        const fileInput = document.getElementById('show-file-input');
         const clearBtn = document.getElementById('btn-clear');
         const recordBtn = document.getElementById('btn-record');
         const mirrorToggleBtn = document.getElementById('btn-mirror-toggle');
@@ -183,11 +212,13 @@ class App {
 
                 if (this.mode === 'playback') {
                     this.timecodeReceiver.connect();
+                    this.midiBridge.connect();
                     this.mirrorSystem.stop();
                     mirrorToggleBtn.textContent = 'Mirror: OFF';
                     this.mirrorEnabled = false;
                 } else {
                     this.timecodeReceiver.disconnect();
+                    this.midiBridge.disconnect();
                 }
 
                 if (this.mode === 'live') {
@@ -201,12 +232,74 @@ class App {
         if (goBtn) {
             goBtn.addEventListener('click', () => {
                 this.cueList.go();
+                this.setTransportStatus(`Cue active: ${this.cueList.getCurrentCue() ? this.cueList.getCurrentCue().name : 'none'}`);
             });
         }
 
         if (backBtn) {
             backBtn.addEventListener('click', () => {
                 this.cueList.back();
+                this.setTransportStatus(`Cue active: ${this.cueList.getCurrentCue() ? this.cueList.getCurrentCue().name : 'none'}`);
+            });
+        }
+
+        if (playBtn) {
+            playBtn.addEventListener('click', () => {
+                this.cueList.play();
+                this.playStartTime = Date.now();
+                this.setTransportStatus(`Playing cues from: ${this.cueList.getCurrentCue() ? this.cueList.getCurrentCue().name : 'none'}`);
+                this.mirrorSystem.markDirty();
+                this.updateShowTimer();
+            });
+        }
+
+        if (pauseBtn) {
+            pauseBtn.addEventListener('click', () => {
+                this.cueList.pause();
+                this.setTransportStatus('Paused');
+            });
+        }
+
+        if (stopBtn) {
+            stopBtn.addEventListener('click', () => {
+                this.cueList.stop();
+                this.playStartTime = null;
+                this.setTransportStatus('Stopped');
+                this.fadeEngine.clear();
+                this.programmer.clear();
+                this.mirrorSystem.markDirty();
+                this.updateShowTimer();
+            });
+        }
+
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => {
+                this.saveShow();
+            });
+        }
+
+        if (loadBtn) {
+            loadBtn.addEventListener('click', () => {
+                if (fileInput) fileInput.click();
+            });
+        }
+
+        if (fileInput) {
+            fileInput.addEventListener('change', (event) => {
+                const file = event.target.files && event.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        this.loadShow(e.target.result);
+                    } catch (err) {
+                        console.error('Failed to load show file', err);
+                        this.setTransportStatus('Load failed');
+                    }
+                };
+                reader.readAsText(file);
+                fileInput.value = '';
             });
         }
 
@@ -271,6 +364,172 @@ class App {
 
     setTimecodeStatus(text) {
         if (this.timecodeStatusEl) this.timecodeStatusEl.textContent = text;
+    }
+
+    updateShowTimer() {
+        if (!this.showTimerEl) return;
+        if (!this.playStartTime) {
+            this.showTimerEl.textContent = 'Elapsed: 00:00';
+            return;
+        }
+        const elapsed = Math.floor((Date.now() - this.playStartTime) / 1000);
+        const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+        const secs = (elapsed % 60).toString().padStart(2, '0');
+        this.showTimerEl.textContent = `Elapsed: ${mins}:${secs}`;
+        if (this.cueList.playing) {
+            setTimeout(() => this.updateShowTimer(), 1000);
+        }
+    }
+
+    collectShowData() {
+        return {
+            createdAt: new Date().toISOString(),
+            mode: this.mode,
+            fixtures: this.patchEngine.getAllFixtures().map(f => ({
+                className: f.constructor.name,
+                id: f.id,
+                name: f.name,
+                manufacturer: f.manufacturer,
+                universe: f.universe,
+                address: f.address,
+                intensity: f.intensity,
+                color: { ...f.color },
+                channels: f.channels,
+                channelMap: f.channelMap,
+                position: f.threeObject ? { x: f.threeObject.position.x, y: f.threeObject.position.y, z: f.threeObject.position.z } : null
+            })),
+            cues: this.cueList.cues,
+            palettes: {
+                color: this.paletteManager.getAllColorPalettes(),
+                position: Object.values(this.paletteManager.palettes.position),
+                beam: Object.values(this.paletteManager.palettes.beam)
+            },
+            groups: this.groupManager.getAll(),
+            currentCueIndex: this.cueList.currentIndex
+        };
+    }
+
+    downloadJSON(filename, data) {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+
+    saveShow() {
+        try {
+            const showData = this.collectShowData();
+            const name = `glaed-show-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+            this.downloadJSON(name, showData);
+            this.setTransportStatus('Show saved');
+        } catch (err) {
+            console.error('Failed to save show:', err);
+            this.setTransportStatus('Save failed');
+        }
+    }
+
+    resetShow() {
+        this.patchEngine.getAllFixtures().forEach(f => {
+            if (f.threeObject && this.stageEngine) {
+                this.stageEngine.remove(f.threeObject);
+            }
+        });
+
+        this.patchEngine.fixtures = [];
+        this.patchEngine.universes = {};
+
+        this.cueList.cues = [];
+        this.cueList.currentIndex = -1;
+        this.cueList.playing = false;
+        this.cueList.pause();
+
+        this.paletteManager.palettes = { color: {}, position: {}, beam: {} };
+        this.groupManager.groups = {};
+
+        this.programmer.clear();
+        this.fadeEngine.clear();
+
+        if (this.cueListPanel) this.cueListPanel.render();
+        if (this.timelinePanel) this.timelinePanel.render();
+        if (this.palettePanel) this.palettePanel.render();
+        if (this.groupPanel) this.groupPanel.render();
+        if (this.dmxSheet) this.dmxSheet.updateData(new Array(512).fill(0));
+    }
+
+    loadShow(jsonString) {
+        const data = JSON.parse(jsonString);
+        this.resetShow();
+
+        if (data.mode) {
+            this.mode = data.mode;
+            const modeSelect = document.getElementById('mode-select');
+            if (modeSelect) modeSelect.value = this.mode;
+        }
+
+        const fixtureMap = {
+            WashLight,
+            MovingHead,
+        };
+
+        (data.fixtures || []).forEach(fixtureData => {
+            let fixture;
+            if (fixtureData.className && fixtureMap[fixtureData.className]) {
+                fixture = new fixtureMap[fixtureData.className]({
+                    id: fixtureData.id,
+                    name: fixtureData.name,
+                    manufacturer: fixtureData.manufacturer
+                });
+            } else {
+                fixture = new _BaseFixture({ id: fixtureData.id, name: fixtureData.name, manufacturer: fixtureData.manufacturer });
+            }
+
+            fixture.intensity = fixtureData.intensity || 0;
+            fixture.color = { ...fixtureData.color };
+            fixture.channels = fixtureData.channels || fixture.channels;
+            fixture.channelMap = fixtureData.channelMap || fixture.channelMap;
+
+            const obj = fixture.createThreeObject();
+            if (fixtureData.position && obj) {
+                obj.position.set(fixtureData.position.x, fixtureData.position.y, fixtureData.position.z);
+            }
+            if (this.stageEngine) this.stageEngine.add(obj);
+
+            this.patchEngine.patchFixture(fixture, fixtureData.universe || 0, fixtureData.address || 1);
+        });
+
+        (data.palettes && data.palettes.color || []).forEach(p => {
+            this.paletteManager.addColorPalette(p.id, p.name, p.color);
+        });
+        (data.palettes && data.palettes.position || []).forEach(p => {
+            this.paletteManager.addPositionPalette(p.id, p.name, p.panTilt);
+        });
+        (data.palettes && data.palettes.beam || []).forEach(p => {
+            this.paletteManager.addBeamPalette(p.id, p.name, p.settings);
+        });
+
+        if (data.groups) {
+            Object.entries(data.groups).forEach(([name, members]) => {
+                this.groupManager.createGroup(name, members);
+            });
+        }
+
+        if (Array.isArray(data.cues)) {
+            this.cueList.cues = data.cues;
+            this.cueList.currentIndex = (typeof data.currentCueIndex === 'number') ? data.currentCueIndex : -1;
+        }
+
+        if (this.cueListPanel) this.cueListPanel.render();
+        if (this.timelinePanel) this.timelinePanel.render();
+        if (this.palettePanel) this.palettePanel.render();
+        if (this.groupPanel) this.groupPanel.render();
+
+        this.setTransportStatus('Show loaded');
+        this.mirrorSystem.markDirty();
     }
 
     createTestPatch() {
