@@ -7,9 +7,12 @@ class App {
         this.fadeEngine = null;
         this.cueList = null;
         this.mirrorSystem = null;
+        this.groupManager = null;
         this.artnetClient = null;
         this.dmxSheet = null;
         this.inspectorPanel = null;
+        this.transportStatusEl = null;
+        this.mirrorEnabled = true;
         
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
@@ -25,6 +28,7 @@ class App {
         this.programmer = new Programmer();
         this.fadeEngine = new FadeEngine();
         this.cueList = new CueList();
+        this.groupManager = new GroupManager();
         this.mirrorSystem = new MirrorSystem(() => {
             this.fadeEngine.update(1 / 40); // 40 Hz simulation
             this.sendDmx();
@@ -34,6 +38,12 @@ class App {
             if (cue) {
                 console.log('Cue fired:', cue.name || cue.id);
                 this.fadeEngine.startCue(cue, this.patchEngine);
+            }
+        };
+
+        this.cueList.onFollow = (cue) => {
+            if (cue) {
+                console.log('Auto-following cue:', cue.name || cue.id);
             }
         };
         
@@ -63,15 +73,19 @@ class App {
         const cueListPanelContainer = document.getElementById('cue-list-panel');
         if (cueListPanelContainer) {
             this.cueListPanel = new CueListPanel(cueListPanelContainer, this.cueList);
+            // Callbacks are defined for future extension; CueListPanel performs go/back itself currently.
             this.cueListPanel.onGo = (cue) => {
-                this.cueList.go();
+                this.setTransportStatus(`Cue active: ${cue ? cue.name : 'none'}`);
             };
             this.cueListPanel.onBack = (cue) => {
-                this.cueList.back();
+                this.setTransportStatus(`Cue active: ${cue ? cue.name : 'none'}`);
             };
         } else {
             console.error('Could not find #cue-list-panel container for CueListPanel.');
         }
+
+        this.transportStatusEl = document.getElementById('transport-status');
+        this.setupTransportControls();
 
         // 3. Hardware
         this.artnetClient = new ArtnetClient();
@@ -92,6 +106,75 @@ class App {
         this.programmer.onUpdate = () => {
             this.patchEngine.getAllFixtures().forEach(f => f.updateThreeObject());
         };
+    }
+
+    setupTransportControls() {
+        const goBtn = document.getElementById('btn-go');
+        const backBtn = document.getElementById('btn-back');
+        const clearBtn = document.getElementById('btn-clear');
+        const recordBtn = document.getElementById('btn-record');
+        const mirrorToggleBtn = document.getElementById('btn-mirror-toggle');
+
+        if (goBtn) {
+            goBtn.addEventListener('click', () => {
+                this.cueList.go();
+            });
+        }
+
+        if (backBtn) {
+            backBtn.addEventListener('click', () => {
+                this.cueList.back();
+            });
+        }
+
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                this.programmer.clear();
+                this.setTransportStatus('Programmer cleared');
+            });
+        }
+
+        if (recordBtn) {
+            recordBtn.addEventListener('click', () => {
+                const newCueId = `cue-${String(this.cueList.cues.length + 1).padStart(3, '0')}`;
+                const data = {};
+                this.patchEngine.getAllFixtures().forEach(f => {
+                    const progState = this.programmer.getValuesForFixture(f.id);
+                    const baseState = {
+                        intensity: f.intensity,
+                        color: { ...f.color }
+                    };
+                    const merged = this.programmer.getMergedState(f.id, baseState);
+                    data[f.id] = {
+                        intensity: merged.intensity,
+                        color: { ...merged.color }
+                    };
+                });
+                const cue = { id: newCueId, name: `Recorded ${newCueId}`, fadeIn: 1.0, fadeOut: 0, delay: 0, follow: false, data };
+                this.cueList.addCue(cue);
+                this.cueListPanel.render();
+                this.setTransportStatus(`Recorded ${newCueId}`);
+            });
+        }
+
+        if (mirrorToggleBtn) {
+            mirrorToggleBtn.addEventListener('click', () => {
+                this.mirrorEnabled = !this.mirrorEnabled;
+                if (this.mirrorEnabled) {
+                    this.mirrorSystem.start();
+                    mirrorToggleBtn.textContent = 'Mirror: ON';
+                    this.setTransportStatus('Mirror ON');
+                } else {
+                    this.mirrorSystem.stop();
+                    mirrorToggleBtn.textContent = 'Mirror: OFF';
+                    this.setTransportStatus('Mirror OFF');
+                }
+            });
+        }
+    }
+
+    setTransportStatus(text) {
+        if (this.transportStatusEl) this.transportStatusEl.textContent = text;
     }
 
     createTestPatch() {
@@ -127,10 +210,25 @@ class App {
             fadeIn: 1.2,
             fadeOut: 0,
             delay: 0,
-            follow: false,
+            follow: true,
+            followTime: 4.0,
             data: {
                 'wash-1': { intensity: 180, color: { r: 255, g: 120, b: 50 } },
                 'wash-2': { intensity: 180, color: { r: 255, g: 120, b: 50 } }
+            }
+        });
+
+        // Auto-start the first cue for sanity check
+        this.cueList.addCue({
+            id: 'cue-003',
+            name: 'Cool blue',
+            fadeIn: 1.2,
+            fadeOut: 0,
+            delay: 0,
+            follow: false,
+            data: {
+                'wash-1': { intensity: 255, color: { r: 40, g: 80, b: 255 } },
+                'wash-2': { intensity: 255, color: { r: 40, g: 80, b: 255 } }
             }
         });
 

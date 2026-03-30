@@ -16,6 +16,34 @@
             flex-direction: column;
             height: 100vh;
         }
+        .transport-bar {
+            background: #111;
+            border-bottom: 1px solid #333;
+            padding: 6px 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .transport-bar button {
+            border: 1px solid #444;
+            background: #222;
+            color: #fff;
+            padding: 6px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .transport-bar button.active {
+            background: #ffb400;
+            color: #111;
+            border-color: #ffb400;
+        }
+        .transport-status {
+            color: #ffb400;
+            margin-left: auto;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 11px;
+        }
         .main-container {
             display: flex;
             flex: 1;
@@ -100,6 +128,15 @@
 </head>
 <body>
 
+    <div class="transport-bar">
+        <button id="btn-go">GO</button>
+        <button id="btn-back">BACK</button>
+        <button id="btn-clear">CLEAR</button>
+        <button id="btn-record">RECORD</button>
+        <button id="btn-mirror-toggle">Mirror: ON</button>
+        <span class="transport-status" id="transport-status">Live</span>
+    </div>
+
     <div class="main-container">
         <div id="left-sidebar">
             <h2>Fixtures</h2>
@@ -129,6 +166,7 @@
     <script src="engine/FadeEngine.js"></script>
     <script src="engine/CueList.js"></script>
     <script src="engine/MirrorSystem.js"></script>
+    <script src="engine/GroupManager.js"></script>
     <script src="engine/StageEngine.js"></script>
 
     <!-- Fixtures -->

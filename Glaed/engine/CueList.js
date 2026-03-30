@@ -3,6 +3,8 @@ class CueList {
         this.cues = [];
         this.currentIndex = -1;
         this.onCueChange = null;
+        this.onFollow = null; // callback for auto-follow
+        this.followTimer = null;
     }
 
     addCue(cue) {
@@ -42,8 +44,26 @@ class CueList {
     }
 
     _emitCurrent() {
+        if (this.followTimer) {
+            clearTimeout(this.followTimer);
+            this.followTimer = null;
+        }
+
+        const cue = this.getCurrentCue();
         if (this.onCueChange) {
-            this.onCueChange(this.getCurrentCue());
+            this.onCueChange(cue);
+        }
+
+        if (cue && cue.follow) {
+            const followTime = Number(cue.followTime) || 0;
+            if (followTime >= 0) {
+                this.followTimer = setTimeout(() => {
+                    if (this.onFollow) {
+                        this.onFollow(cue);
+                    }
+                    this.go();
+                }, followTime * 1000);
+            }
         }
     }
 
