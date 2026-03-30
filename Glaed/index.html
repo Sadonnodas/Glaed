@@ -44,6 +44,12 @@
             text-transform: uppercase;
             font-size: 11px;
         }
+        .timecode-status {
+            margin-left: 14px;
+            color: #8adeff;
+            font-size: 11px;
+            font-weight: bold;
+        }
         .main-container {
             display: flex;
             flex: 1;
@@ -177,7 +183,16 @@
         <button id="btn-clear">CLEAR</button>
         <button id="btn-record">RECORD</button>
         <button id="btn-mirror-toggle">Mirror: ON</button>
+        <label style="margin-left: 12px;">
+            Mode:
+            <select id="mode-select">
+               <option value="design">Design</option>
+               <option value="live">Live</option>
+               <option value="playback">Playback</option>
+            </select>
+        </label>
         <span class="transport-status" id="transport-status">Live</span>
+        <span class="timecode-status" id="timecode-status">TC: --:--:--:--</span>
     </div>
 
     <div class="main-container">
@@ -204,6 +219,9 @@
 
     <!-- Third-party libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <!-- Hardware -->
+    <script src="hardware/TimecodeReceiver.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
 

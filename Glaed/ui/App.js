@@ -12,6 +12,8 @@ class App {
         this.dmxSheet = null;
         this.inspectorPanel = null;
         this.transportStatusEl = null;
+        this.timecodeStatusEl = null;
+        this.mode = 'live';
         this.mirrorEnabled = true;
         
         this.raycaster = new THREE.Raycaster();
@@ -30,6 +32,7 @@ class App {
         this.cueList = new CueList();
         this.groupManager = new GroupManager();
         this.paletteManager = new PaletteManager();
+        this.timecodeReceiver = new TimecodeReceiver();
         this.mirrorSystem = new MirrorSystem(() => {
             this.fadeEngine.update(1 / 40); // 40 Hz simulation
             this.sendDmx();
@@ -50,6 +53,21 @@ class App {
                 console.log('Auto-following cue:', cue.name || cue.id);
                 this.setTransportStatus(`Auto-follow cue: ${cue.name || cue.id}`);
             }
+        };
+
+        this.timecodeReceiver.onTimecode = (tc) => {
+            this.setTimecodeStatus(`TC: ${String(tc.hours).padStart(2,'0')}:${String(tc.minutes).padStart(2,'0')}:${String(tc.seconds).padStart(2,'0')}:${String(tc.frames).padStart(2,'0')}`);
+
+            if (this.mode === 'playback') {
+                const idx = Math.floor(tc.totalSeconds / 4) % this.cueList.cues.length;
+                if (idx !== this.cueList.currentIndex) {
+                    this.cueList.go(idx);
+                }
+            }
+        };
+
+        this.timecodeReceiver.onLock = (locked) => {
+            this.setTransportStatus(locked ? 'Timecode locked' : 'Timecode unlocked');
         };
         
         // 2. UI
@@ -125,6 +143,7 @@ class App {
         }
 
         this.transportStatusEl = document.getElementById('transport-status');
+        this.timecodeStatusEl = document.getElementById('timecode-status');
         this.setupTransportControls();
 
         // 3. Hardware
@@ -154,6 +173,30 @@ class App {
         const clearBtn = document.getElementById('btn-clear');
         const recordBtn = document.getElementById('btn-record');
         const mirrorToggleBtn = document.getElementById('btn-mirror-toggle');
+        const modeSelect = document.getElementById('mode-select');
+
+        if (modeSelect) {
+            modeSelect.value = this.mode;
+            modeSelect.addEventListener('change', (e) => {
+                this.mode = e.target.value;
+                this.setTransportStatus(`Mode: ${this.mode}`);
+
+                if (this.mode === 'playback') {
+                    this.timecodeReceiver.connect();
+                    this.mirrorSystem.stop();
+                    mirrorToggleBtn.textContent = 'Mirror: OFF';
+                    this.mirrorEnabled = false;
+                } else {
+                    this.timecodeReceiver.disconnect();
+                }
+
+                if (this.mode === 'live') {
+                    this.mirrorSystem.start();
+                    mirrorToggleBtn.textContent = 'Mirror: ON';
+                    this.mirrorEnabled = true;
+                }
+            });
+        }
 
         if (goBtn) {
             goBtn.addEventListener('click', () => {
@@ -224,6 +267,10 @@ class App {
 
     setTransportStatus(text) {
         if (this.transportStatusEl) this.transportStatusEl.textContent = text;
+    }
+
+    setTimecodeStatus(text) {
+        if (this.timecodeStatusEl) this.timecodeStatusEl.textContent = text;
     }
 
     createTestPatch() {
