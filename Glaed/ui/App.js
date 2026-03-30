@@ -112,6 +112,18 @@ class App {
             console.error('Could not find #timeline-panel container for TimelinePanel.');
         }
 
+        const kindleContainer = document.getElementById('kindle-assistant');
+        if (kindleContainer) {
+            this.kindleAssistant = new KindleAssistant(kindleContainer, this.cueList, this.paletteManager);
+            this.kindleAssistant.onCueGenerated = (cue) => {
+                this.timelinePanel.render();
+                this.cueListPanel.render();
+                this.setTransportStatus(`AI cue generated: ${cue.name}`);
+            };
+        } else {
+            console.error('Could not find #kindle-assistant container for KindleAssistant.');
+        }
+
         this.transportStatusEl = document.getElementById('transport-status');
         this.setupTransportControls();
 
