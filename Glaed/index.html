@@ -124,6 +124,49 @@
         .inspector-slider input {
             width: 100%;
         }
+        .palette-list {
+            margin-top: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .palette-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px;
+            border: 1px solid #333;
+            border-radius: 4px;
+            background: #1b1b1b;
+        }
+        .palette-item.active {
+            border-color: #ffb400;
+            background: #2b1f0f;
+        }
+        .palette-swatch {
+            width: 18px;
+            height: 18px;
+            border-radius: 3px;
+            border: 1px solid #444;
+            display: inline-block;
+        }
+        .palette-name {
+            flex: 1;
+            color: #fff;
+        }
+        .palette-form {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+        .palette-form input,
+        .palette-form button {
+            padding: 4px 6px;
+            border: 1px solid #444;
+            border-radius: 3px;
+            background: #222;
+            color: #f0f0f0;
+        }
     </style>
 </head>
 <body>
@@ -151,6 +194,7 @@
 
         <div id="right-sidebar">
             <div id="inspector-panel"></div>
+            <div id="palette-panel" style="margin-top:20px;"></div>
         </div>
     </div>
 
@@ -177,6 +221,7 @@
     <!-- UI -->
     <script src="ui/DmxSheet.js"></script>
     <script src="ui/InspectorPanel.js"></script>
+    <script src="ui/PalettePanel.js"></script>
     <script src="ui/CueListPanel.js"></script>
     <script src="ui/App.js"></script>
 

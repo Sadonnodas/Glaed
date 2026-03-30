@@ -29,6 +29,7 @@ class App {
         this.fadeEngine = new FadeEngine();
         this.cueList = new CueList();
         this.groupManager = new GroupManager();
+        this.paletteManager = new PaletteManager();
         this.mirrorSystem = new MirrorSystem(() => {
             this.fadeEngine.update(1 / 40); // 40 Hz simulation
             this.sendDmx();
@@ -73,7 +74,6 @@ class App {
         const cueListPanelContainer = document.getElementById('cue-list-panel');
         if (cueListPanelContainer) {
             this.cueListPanel = new CueListPanel(cueListPanelContainer, this.cueList);
-            // Callbacks are defined for future extension; CueListPanel performs go/back itself currently.
             this.cueListPanel.onGo = (cue) => {
                 this.setTransportStatus(`Cue active: ${cue ? cue.name : 'none'}`);
             };
@@ -82,6 +82,16 @@ class App {
             };
         } else {
             console.error('Could not find #cue-list-panel container for CueListPanel.');
+        }
+
+        const palettePanelContainer = document.getElementById('palette-panel');
+        if (palettePanelContainer) {
+            this.palettePanel = new PalettePanel(palettePanelContainer, this.paletteManager);
+            this.palettePanel.onPaletteSelected = (palette) => {
+                this.setTransportStatus(`Palette selected: ${palette.name}`);
+            };
+        } else {
+            console.error('Could not find #palette-panel container for PalettePanel.');
         }
 
         this.transportStatusEl = document.getElementById('transport-status');
@@ -145,10 +155,19 @@ class App {
                         color: { ...f.color }
                     };
                     const merged = this.programmer.getMergedState(f.id, baseState);
-                    data[f.id] = {
-                        intensity: merged.intensity,
-                        color: { ...merged.color }
-                    };
+                    const selectedPalette = this.palettePanel ? this.palettePanel.getSelectedPalette() : null;
+
+                    if (selectedPalette) {
+                        data[f.id] = {
+                            intensity: merged.intensity,
+                            colorPalette: selectedPalette.id
+                        };
+                    } else {
+                        data[f.id] = {
+                            intensity: merged.intensity,
+                            color: { ...merged.color }
+                        };
+                    }
                 });
                 const cue = { id: newCueId, name: `Recorded ${newCueId}`, fadeIn: 1.0, fadeOut: 0, delay: 0, follow: false, data };
                 this.cueList.addCue(cue);
@@ -190,6 +209,10 @@ class App {
         wash2Obj.position.set(5, 5, 0);
         this.stageEngine.add(wash2Obj);
 
+        // Create some reference palettes
+        this.paletteManager.addColorPalette('tour-red', 'Tour Red', { r: 255, g: 80, b: 30 });
+        this.paletteManager.addColorPalette('stage-blue', 'Stage Blue', { r: 30, g: 120, b: 255 });
+
         // Build a small test cue stack.
         this.cueList.addCue({
             id: 'cue-001',
@@ -206,15 +229,15 @@ class App {
 
         this.cueList.addCue({
             id: 'cue-002',
-            name: 'Warm dim',
+            name: 'Warm dim (Tour Red palette)',
             fadeIn: 1.2,
             fadeOut: 0,
             delay: 0,
             follow: true,
             followTime: 4.0,
             data: {
-                'wash-1': { intensity: 180, color: { r: 255, g: 120, b: 50 } },
-                'wash-2': { intensity: 180, color: { r: 255, g: 120, b: 50 } }
+                'wash-1': { intensity: 180, colorPalette: 'tour-red' },
+                'wash-2': { intensity: 180, colorPalette: 'tour-red' }
             }
         });
 
@@ -261,6 +284,23 @@ class App {
                 if (fadeState) {
                     if (fadeState.intensity !== undefined) finalState.intensity = fadeState.intensity;
                     if (fadeState.color !== undefined) finalState.color = { ...finalState.color, ...fadeState.color };
+                }
+
+                // Process cue color palettes (per-fixture reference)
+                const currentCue = this.cueList.getCurrentCue();
+                if (currentCue && currentCue.data && currentCue.data[fixture.id]) {
+                    const entry = currentCue.data[fixture.id];
+                    if (entry.colorPalette) {
+                        const palette = this.paletteManager.getColorPalette(entry.colorPalette);
+                        if (palette) {
+                            finalState.color = { ...palette.color };
+                        }
+                    } else if (entry.color) {
+                        finalState.color = { ...finalState.color, ...entry.color };
+                    }
+                    if (entry.intensity !== undefined) {
+                        finalState.intensity = entry.intensity;
+                    }
                 }
 
                 // Programmer is LTP and overrides fade and base state.
