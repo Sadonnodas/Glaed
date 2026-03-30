@@ -60,6 +60,19 @@ class App {
             console.error('Could not find #inspector-panel container for InspectorPanel.');
         }
 
+        const cueListPanelContainer = document.getElementById('cue-list-panel');
+        if (cueListPanelContainer) {
+            this.cueListPanel = new CueListPanel(cueListPanelContainer, this.cueList);
+            this.cueListPanel.onGo = (cue) => {
+                this.cueList.go();
+            };
+            this.cueListPanel.onBack = (cue) => {
+                this.cueList.back();
+            };
+        } else {
+            console.error('Could not find #cue-list-panel container for CueListPanel.');
+        }
+
         // 3. Hardware
         this.artnetClient = new ArtnetClient();
         this.artnetClient.connect()
