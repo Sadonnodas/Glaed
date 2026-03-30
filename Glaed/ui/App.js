@@ -40,11 +40,15 @@ class App {
                 console.log('Cue fired:', cue.name || cue.id);
                 this.fadeEngine.startCue(cue, this.patchEngine);
             }
+            if (this.timelinePanel) {
+                this.timelinePanel.render();
+            }
         };
 
         this.cueList.onFollow = (cue) => {
             if (cue) {
                 console.log('Auto-following cue:', cue.name || cue.id);
+                this.setTransportStatus(`Auto-follow cue: ${cue.name || cue.id}`);
             }
         };
         
@@ -92,6 +96,20 @@ class App {
             };
         } else {
             console.error('Could not find #palette-panel container for PalettePanel.');
+        }
+
+        const groupPanelContainer = document.getElementById('group-panel');
+        if (groupPanelContainer) {
+            this.groupPanel = new GroupPanel(groupPanelContainer, this.patchEngine, this.groupManager);
+        } else {
+            console.error('Could not find #group-panel container for GroupPanel.');
+        }
+
+        const timelinePanelContainer = document.getElementById('timeline-panel');
+        if (timelinePanelContainer) {
+            this.timelinePanel = new TimelinePanel(timelinePanelContainer, this.cueList);
+        } else {
+            console.error('Could not find #timeline-panel container for TimelinePanel.');
         }
 
         this.transportStatusEl = document.getElementById('transport-status');
