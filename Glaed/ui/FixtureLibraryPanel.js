@@ -2,229 +2,356 @@ class FixtureLibraryPanel {
     constructor(container, patchEngine, app) {
         this.container = container;
         this.patchEngine = patchEngine;
-        this.app = app; // reference to App for stageEngine
-        this.library = {}; // name -> profile
+        this.app = app; 
+        this.library = {}; 
+        this.onFixtureSelected = null; 
+        this.sortKey = 'id';
+        this.sortAsc = true;
 
         this.init();
     }
 
     init() {
         this.container.innerHTML = `
-            <div class="fixture-header"><h3>Fixture Library</h3></div>
-            <div class="fixture-list" id="fixture-list"></div>
-            <div class="fixture-manual">
-                <h4>Manual Fixture</h4>
-                <div class="manual-fields">
-                    <label>Name: <input id="manual-name" type="text" placeholder="Fixture Name" /></label>
-                    <label>Manufacturer: <input id="manual-manufacturer" type="text" placeholder="Manufacturer" /></label>
+            <style>
+                details { margin-bottom: 8px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+                summary { padding: 10px; font-family: var(--font-mono); font-size: 11px; font-weight: bold; color: var(--accent); cursor: pointer; background: var(--bg-mid); border-bottom: 1px solid var(--border); }
+                .details-content { padding: 10px; }
+                .ch-row { display: flex; gap: 4px; align-items: center; margin-bottom: 4px; }
+                .inv-card { padding:8px; background:var(--bg); border:1px solid var(--border-dim); border-radius:4px; margin-bottom:6px; cursor:pointer; transition: 0.1s; }
+                .inv-card:hover { border-color: var(--text-muted); }
+                .sort-header { cursor: pointer; user-select: none; }
+                .sort-header:hover { color: var(--accent); }
+            </style>
+
+            <div class="fixture-header"><h3>Library</h3></div>
+            
+            <details open>
+                <summary>1. Fixtures on Stage</summary>
+                <div class="details-content" style="padding:0;">
+                    <div style="overflow-x: auto; max-height: 300px;">
+                        <table class="patch-table" style="margin:0; border:none;">
+                            <thead>
+                                <tr>
+                                    <th class="sort-header" data-sort="id">ID ↕</th>
+                                    <th class="sort-header" data-sort="name">Name ↕</th>
+                                    <th class="sort-header" data-sort="address">U:A ↕</th>
+                                    <th class="sort-header" data-sort="channels">Ch ↕</th>
+                                    <th>X</th>
+                                </tr>
+                            </thead>
+                            <tbody id="patch-table-body"></tbody>
+                        </table>
+                    </div>
                 </div>
-                <div class="channels-section">
-                    <h5>Channels</h5>
-                    <div id="channels-list"></div>
-                    <button id="add-channel-btn">Add Channel</button>
+            </details>
+
+            <details open>
+                <summary>2. Fixture Inventory</summary>
+                <div class="details-content">
+                    <p style="color:var(--text-muted); font-size:10px; margin-bottom:8px;">Drag cards onto the 3D stage, or click to patch manually.</p>
+                    <div id="fixture-inventory" style="display:flex; flex-direction:column; max-height: 300px; overflow-y: auto;"></div>
                 </div>
-                <button id="import-fixture-btn">Import Fixture</button>
-            </div>
-            <div class="fixture-patch">
-                <input id="fixture-universe" type="number" placeholder="Universe" min="0" max="15" value="0" />
-                <input id="fixture-address" type="number" placeholder="Address" min="1" max="512" value="1" />
-                <button id="fixture-patch-btn">Patch Selected</button>
-            </div>
+            </details>
+
+            <details>
+                <summary>3. Create / Import Fixtures</summary>
+                <div class="details-content">
+                    <div style="display:flex; gap:6px; margin-bottom: 12px;">
+                        <button id="btn-import-file" class="btn" style="flex:1;">Import .json / .gdtf</button>
+                        <input type="file" id="import-file-input" accept=".json,.gdtf" style="display:none" />
+                    </div>
+                    
+                    <div style="border-top: 1px solid var(--border); margin: 12px 0;"></div>
+                    <h4 style="font-size: 10px; color: var(--text-muted); margin-bottom: 8px;">FIXTURE BUILDER</h4>
+                    
+                    <select id="manual-type" style="margin-bottom:8px; width:100%;">
+                        <option value="Wash">Wash / Par</option>
+                        <option value="Spot">Spot / Moving Head</option>
+                        <option value="Custom">Custom / Other</option>
+                    </select>
+                    <input id="manual-name" placeholder="Fixture Name (e.g., LED Wash)" />
+                    <input id="manual-manufacturer" placeholder="Manufacturer (e.g., Generic)" />
+                    
+                    <div id="manual-channels-container" style="margin: 8px 0;"></div>
+                    
+                    <div style="display:flex; gap:6px; margin-top: 12px;">
+                        <button id="btn-add-channel" class="btn" style="flex:1;">+ Add Channel</button>
+                        <button id="btn-save-manual" class="btn btn-go" style="flex:1;">Save to Library</button>
+                    </div>
+                </div>
+            </details>
         `;
 
-        this.listEl = this.container.querySelector('#fixture-list');
-        this.universeInput = this.container.querySelector('#fixture-universe');
-        this.addressInput = this.container.querySelector('#fixture-address');
-        this.patchBtn = this.container.querySelector('#fixture-patch-btn');
-
-        this.patchBtn.addEventListener('click', () => {
-            this.patchSelectedFixture();
+        this.inventoryEl = this.container.querySelector('#fixture-inventory');
+        this.tableBody = this.container.querySelector('#patch-table-body');
+        this.channelsContainer = this.container.querySelector('#manual-channels-container');
+        
+        // Sorting Logic
+        this.container.querySelectorAll('.sort-header').forEach(th => {
+            th.addEventListener('click', () => {
+                const key = th.dataset.sort;
+                if (this.sortKey === key) {
+                    this.sortAsc = !this.sortAsc; // toggle direction
+                } else {
+                    this.sortKey = key;
+                    this.sortAsc = true;
+                }
+                this.renderTable();
+            });
         });
 
-        this.nameInput = this.container.querySelector('#manual-name');
-        this.manufacturerInput = this.container.querySelector('#manual-manufacturer');
-        this.channelsList = this.container.querySelector('#channels-list');
-        this.addChannelBtn = this.container.querySelector('#add-channel-btn');
-        this.importBtn = this.container.querySelector('#import-fixture-btn');
-
-        this.addChannelBtn.addEventListener('click', () => {
-            this.addChannelField();
+        // 1. File Upload
+        const fileInput = this.container.querySelector('#import-file-input');
+        this.container.querySelector('#btn-import-file').addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const profile = JSON.parse(event.target.result);
+                    this.addProfileToLibrary(file.name.split('.')[0], profile);
+                } catch (err) { alert("Invalid JSON file."); }
+            };
+            reader.readAsText(file);
         });
 
-        this.importBtn.addEventListener('click', () => {
-            this.importFixture();
+        // 2. Form Builder
+        this.container.querySelector('#btn-add-channel').addEventListener('click', () => this.addChannelRow());
+        this.addChannelRow(); 
+
+        this.container.querySelector('#btn-save-manual').addEventListener('click', () => {
+            const name = this.container.querySelector('#manual-name').value.trim();
+            const type = this.container.querySelector('#manual-type').value;
+            const manufacturer = this.container.querySelector('#manual-manufacturer').value.trim() || 'Custom';
+            if (!name) return alert("Please enter a fixture name.");
+
+            const channelRows = this.channelsContainer.querySelectorAll('.ch-row');
+            const channels = [];
+            channelRows.forEach((row, index) => {
+                channels.push({ 
+                    offset: index, 
+                    name: row.querySelector('.ch-name').value.trim() || `Channel ${index + 1}`, 
+                    type: row.querySelector('.ch-type').value 
+                });
+            });
+
+            if (channels.length === 0) return alert("Add at least one channel.");
+            const profile = { name, type, manufacturer, channels };
+            this.addProfileToLibrary(`custom-${Date.now()}`, profile);
+            
+            this.container.querySelector('#manual-name').value = '';
+            this.channelsContainer.innerHTML = '';
+            this.addChannelRow();
         });
 
-        this.loadLibrary();
-        this.render();
+        this.loadDefaultLibrary();
     }
 
-    loadLibrary() {
-        // Hardcoded for now; in future, scan utils/fixtures/
+    addChannelRow() {
+        const row = document.createElement('div');
+        row.className = 'ch-row';
+        const chCount = this.channelsContainer.children.length + 1;
+        row.innerHTML = `
+            <span style="font-family:var(--font-mono); font-size:10px; color:var(--text-muted); width:24px;">CH${chCount}</span>
+            <input class="ch-name" placeholder="Name" style="flex:2; margin:0; padding:4px;" />
+            <select class="ch-type" style="flex:2; margin:0; padding:4px;">
+                <option value="intensity">Intensity</option>
+                <option value="red">Red</option><option value="green">Green</option><option value="blue">Blue</option>
+                <option value="white">White</option><option value="amber">Amber</option><option value="uv">UV</option>
+                <option value="pan">Pan</option><option value="tilt">Tilt</option>
+                <option value="custom">Custom</option>
+            </select>
+            <button class="btn btn-remove-ch" style="padding:4px 6px; background:var(--bg-mid); color:red;">X</button>
+        `;
+        row.querySelector('.btn-remove-ch').addEventListener('click', () => {
+            row.remove();
+            this.channelsContainer.querySelectorAll('.ch-row').forEach((r, i) => r.querySelector('span').textContent = `CH${i + 1}`);
+        });
+        this.channelsContainer.appendChild(row);
+    }
+
+    addProfileToLibrary(key, profileObj) {
+        this.library[key] = profileObj;
+        this.renderInventory();
+    }
+
+    loadDefaultLibrary() {
+        this.addProfileToLibrary('default-wash', {
+            name: "Generic Front Wash", type: "Wash", manufacturer: "Glaed",
+            channels: [
+                { offset: 0, name: "Red", type: "red" }, { offset: 1, name: "Green", type: "green" },
+                { offset: 2, name: "Blue", type: "blue" }, { offset: 3, name: "White", type: "white" },
+                { offset: 4, name: "Amber", type: "amber" }, { offset: 5, name: "UV", type: "uv" },
+                { offset: 6, name: "Intensity", type: "intensity" }
+            ]
+        });
+
         const fixtures = [
-            { name: 'moving-head-generic', path: 'utils/fixtures/moving-head-generic.json', type: 'json' },
-            { name: 'led-par-generic', path: 'utils/fixtures/led-par-generic.json', type: 'json' },
-            { name: 'generic-moving-head', path: 'utils/fixtures/generic-moving-head.gdtf', type: 'gdtf' }
+            { name: 'moving-head-generic', path: 'utils/fixtures/moving-head-generic.json' },
+            { name: 'led-par-generic', path: 'utils/fixtures/led-par-generic.json' }
         ];
-
         fixtures.forEach(f => {
-            fetch(f.path)
-                .then(res => res.text())
-                .then(content => {
-                    let profile;
-                    if (f.type === 'json') {
-                        profile = JSON.parse(content);
-                    } else if (f.type === 'gdtf') {
-                        profile = ProfileParser.parseGDTF(content);
-                    }
-                    this.library[f.name] = profile;
-                    this.render();
-                })
-                .catch(err => console.error('Failed to load fixture', f.name, err));
+            fetch(f.path).then(res => res.text()).then(content => this.addProfileToLibrary(f.name, JSON.parse(content))).catch(e => console.error(e));
         });
     }
 
-    render() {
-        this.listEl.innerHTML = '';
-
+    renderInventory() {
+        this.inventoryEl.innerHTML = '';
         Object.entries(this.library).forEach(([key, profile]) => {
-            const item = document.createElement('div');
-            item.className = 'fixture-item';
-            item.innerHTML = `
-                <label>
-                    <input type="radio" name="fixture-select" value="${key}" />
-                    ${profile.name}${profile.manufacturer ? ` (${profile.manufacturer})` : ''}
-                </label>
+            const card = document.createElement('div');
+            card.className = 'inv-card';
+            card.draggable = true;
+            
+            card.innerHTML = `
+                <div class="inv-card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-weight:bold; font-size:11px;">${profile.name}</span>
+                    <span style="font-size:9px; color:var(--text-muted);">${profile.channels.length}ch</span>
+                </div>
+                <div class="inv-card-body" style="display:none; margin-top:8px; border-top:1px solid var(--border-dim); padding-top:8px;">
+                    <input type="text" class="patch-name" value="${profile.name} 1" style="width:100%; margin-bottom:4px;" />
+                    <div style="display:flex; gap:4px; margin-bottom:4px;">
+                        <input type="number" class="patch-uni" value="0" title="Universe" style="flex:1;" />
+                        <input type="number" class="patch-addr" value="1" title="Address" style="flex:1;" />
+                    </div>
+                    <button class="btn btn-go btn-manual-patch" style="width:100%;">Add to Stage</button>
+                </div>
             `;
-            this.listEl.appendChild(item);
+            
+            const header = card.querySelector('.inv-card-header');
+            const body = card.querySelector('.inv-card-body');
+            
+            header.addEventListener('click', () => {
+                const isHidden = body.style.display === 'none';
+                this.inventoryEl.querySelectorAll('.inv-card-body').forEach(b => b.style.display = 'none');
+                if (isHidden) {
+                    body.style.display = 'block';
+                    let nextAddr = 1;
+                    const existing = this.patchEngine.getFixturesByUniverse(0);
+                    if (existing.length > 0) {
+                        const last = existing[existing.length - 1];
+                        nextAddr = last.address + (last.channels ? last.channels.length : 1);
+                    }
+                    card.querySelector('.patch-addr').value = nextAddr;
+                    card.querySelector('.patch-name').value = `${profile.name} ${existing.length + 1}`;
+                }
+            });
+
+            card.querySelector('.btn-manual-patch').addEventListener('click', (e) => {
+                e.stopPropagation();
+                const name = card.querySelector('.patch-name').value;
+                const uni = parseInt(card.querySelector('.patch-uni').value, 10);
+                const addr = parseInt(card.querySelector('.patch-addr').value, 10);
+                this.executePatch(key, name, uni, addr, { x: 0, y: 3, z: 0 }); 
+                body.style.display = 'none'; 
+            });
+
+            card.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('application/json', JSON.stringify({ category: 'fixture', profileKey: key }));
+            });
+
+            this.inventoryEl.appendChild(card);
         });
     }
 
-    patchSelectedFixture() {
-        const selected = this.container.querySelector('input[name="fixture-select"]:checked');
-        if (!selected) {
-            alert('Select a fixture first');
-            return;
-        }
-
-        const profileKey = selected.value;
+    autoPatchAtPosition(profileKey, position) {
         const profile = this.library[profileKey];
         if (!profile) return;
+        const existing = this.patchEngine.getFixturesByUniverse(0);
+        let nextAddr = 1;
+        if (existing.length > 0) {
+            const last = existing[existing.length - 1];
+            nextAddr = last.address + (last.channels ? last.channels.length : 1);
+        }
+        const name = `${profile.name} ${existing.length + 1}`;
+        const dropHeight = Math.max(position.y, 3.0); 
+        this.executePatch(profileKey, name, 0, nextAddr, { x: position.x, y: dropHeight, z: position.z });
+    }
 
-        const universe = parseInt(this.universeInput.value, 10);
-        const address = parseInt(this.addressInput.value, 10);
+    executePatch(profileKey, name, universe, address, position) {
+        const profile = this.library[profileKey];
+        if (!profile) return;
+        if (address + profile.channels.length > 512) return alert("Universe is full!");
 
         try {
             const parsed = ProfileParser.parse(profile);
             let fixture;
-
-            if (profile.name.toLowerCase().includes('moving head')) {
-                fixture = new MovingHead({ name: parsed.name, id: `${profileKey}-${Date.now()}` });
-            } else if (profile.name.toLowerCase().includes('par') || profile.name.toLowerCase().includes('wash')) {
-                fixture = new WashLight({ name: parsed.name, id: `${profileKey}-${Date.now()}` });
+            const typeStr = (profile.type || profile.name).toLowerCase();
+            if (typeStr.includes('spot') || typeStr.includes('moving head')) {
+                fixture = new MovingHead({ name: name, id: `fix-${Date.now()}` });
+            } else if (typeStr.includes('wash') || typeStr.includes('par')) {
+                fixture = new WashLight({ name: name, id: `fix-${Date.now()}` });
             } else {
-                fixture = new _BaseFixture({ name: parsed.name, id: `${profileKey}-${Date.now()}` });
+                fixture = new _BaseFixture({ name: name, id: `fix-${Date.now()}` });
             }
 
             ProfileParser.applyToFixture(fixture, parsed);
             this.patchEngine.patchFixture(fixture, universe, address);
 
             const obj = fixture.createThreeObject();
-            obj.position.set(Math.random() * 10 - 5, Math.random() * 5 + 2, 0);
+            obj.position.copy(position);
+            obj.rotation.x = Math.PI; 
+            
             this.app.stageEngine.add(obj);
-
-            this.app.setTransportStatus(`Patched ${fixture.name} at ${universe}:${address}`);
             this.app.mirrorSystem.markDirty();
-
-        } catch (err) {
-            console.error('Patch failed:', err);
-            this.app.setTransportStatus('Patch failed');
-        }
+            this.renderTable();
+        } catch (err) { console.error("Patch failed", err); }
     }
 
-    addManualFixture() {
-        const jsonText = this.manualTextarea.value.trim();
-        if (!jsonText) {
-            alert('Enter JSON for the fixture');
-            return;
-        }
+    renderTable() {
+        this.tableBody.innerHTML = '';
+        let fixtures = this.patchEngine.getAllFixtures();
+        
+        // Sorting Logic
+        fixtures.sort((a, b) => {
+            let valA, valB;
+            if (this.sortKey === 'name') { valA = a.name; valB = b.name; }
+            else if (this.sortKey === 'address') { valA = a.address; valB = b.address; }
+            else if (this.sortKey === 'channels') { valA = a.channels.length; valB = b.channels.length; }
+            else { valA = a.id; valB = b.id; } // Default by ID
 
-        try {
-            const profile = JSON.parse(jsonText);
-            if (!profile.name) {
-                alert('Fixture must have a name');
-                return;
-            }
-            const key = 'manual-' + Date.now();
-            this.library[key] = profile;
-            this.render();
-            this.manualTextarea.value = ''; // Clear after adding
-            this.app.setTransportStatus(`Added manual fixture: ${profile.name}`);
-        } catch (err) {
-            alert('Invalid JSON: ' + err.message);
-        }
-    }
-
-    addChannelField() {
-        const channelDiv = document.createElement('div');
-        channelDiv.className = 'channel-item';
-        channelDiv.innerHTML = `
-            <input type="number" placeholder="Offset" class="channel-offset" min="0" />
-            <input type="text" placeholder="Name" class="channel-name" />
-            <select class="channel-type">
-                <option value="intensity">Intensity</option>
-                <option value="red">Red</option>
-                <option value="green">Green</option>
-                <option value="blue">Blue</option>
-                <option value="white">White</option>
-                <option value="amber">Amber</option>
-                <option value="uv">UV</option>
-                <option value="pan">Pan</option>
-                <option value="tilt">Tilt</option>
-                <option value="gobo">Gobo</option>
-                <option value="color">Color</option>
-            </select>
-            <button class="remove-channel">Remove</button>
-        `;
-        channelDiv.querySelector('.remove-channel').addEventListener('click', () => {
-            channelDiv.remove();
-        });
-        this.channelsList.appendChild(channelDiv);
-    }
-
-    importFixture() {
-        const name = this.nameInput.value.trim();
-        if (!name) {
-            alert('Enter a fixture name');
-            return;
-        }
-
-        const manufacturer = this.manufacturerInput.value.trim() || 'Custom';
-        const channels = [];
-
-        this.channelsList.querySelectorAll('.channel-item').forEach(item => {
-            const offset = parseInt(item.querySelector('.channel-offset').value, 10);
-            const chName = item.querySelector('.channel-name').value.trim();
-            const type = item.querySelector('.channel-type').value;
-            if (chName && !isNaN(offset)) {
-                channels.push({ offset, name: chName, type });
-            }
+            if (valA < valB) return this.sortAsc ? -1 : 1;
+            if (valA > valB) return this.sortAsc ? 1 : -1;
+            return 0;
         });
 
-        if (channels.length === 0) {
-            alert('Add at least one channel');
+        if (fixtures.length === 0) {
+            this.tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:10px;">No fixtures patched</td></tr>';
             return;
         }
 
-        const profile = { name, manufacturer, channels };
-        const key = 'manual-' + Date.now();
-        this.library[key] = profile;
-        this.render();
+        fixtures.forEach((f, index) => {
+            const row = document.createElement('tr');
+            row.style.cursor = 'pointer';
+            row.innerHTML = `
+                <td>${index + 1}</td>
+                <td style="font-weight:bold; color:var(--text);">${f.name}</td>
+                <td style="color:var(--accent); font-family:var(--font-mono);">${f.universe}.${f.address}</td>
+                <td>${f.channels.length}</td>
+                <td><button class="unpatch-btn" style="padding:2px 4px; font-size:9px; background:var(--bg-mid); border:1px solid var(--border); color:red;">X</button></td>
+            `;
+            
+            // Single vs Double click routing
+            row.addEventListener('click', (e) => {
+                if(e.target.classList.contains('unpatch-btn')) return; 
+                if (this.onFixtureSelected) this.onFixtureSelected(f, false); // Select in 3D, don't switch tabs
+            });
 
-        // Clear the form
-        this.nameInput.value = '';
-        this.manufacturerInput.value = '';
-        this.channelsList.innerHTML = '';
-        this.app.setTransportStatus(`Imported manual fixture: ${name}`);
+            row.addEventListener('dblclick', (e) => {
+                if(e.target.classList.contains('unpatch-btn')) return; 
+                if (this.onFixtureSelected) this.onFixtureSelected(f, true); // True = Switch to Inspector tab
+            });
+
+            row.querySelector('.unpatch-btn').addEventListener('click', () => {
+                this.patchEngine.unpatchFixture(f);
+                if (f.threeObject) {
+                    this.app.stageEngine.transformControl.detach();
+                    this.app.stageEngine.remove(f.threeObject);
+                }
+                this.renderTable();
+            });
+            this.tableBody.appendChild(row);
+        });
     }
 }

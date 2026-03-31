@@ -1,10 +1,8 @@
-
 class WashLight extends _BaseFixture {
     constructor(options = {}) {
         super(options);
         this.name = options.name || 'Wash Light';
 
-        // Example channel map for a simple 7-channel RGBW+A+UV+Dimmer fixture
         this.channels = [
             { offset: 0, name: 'Red', type: 'red' },
             { offset: 1, name: 'Green', type: 'green' },
@@ -15,44 +13,43 @@ class WashLight extends _BaseFixture {
             { offset: 6, name: 'Dimmer', type: 'intensity' },
         ];
         
-        // This mapping would typically be done by the ProfileParser
-        this.channelMap = {
-            red: 1,
-            green: 2,
-            blue: 3,
-            white: 4,
-            amber: 5,
-            uv: 6,
-            intensity: 7,
-        };
-
+        this.channelMap = { red: 1, green: 2, blue: 3, white: 4, amber: 5, uv: 6, intensity: 7 };
         this.color = { r: 255, g: 255, b: 255, w: 255, a: 0, uv: 0 };
     }
 
     createThreeObject() {
         const geometry = new THREE.CylinderGeometry(0.5, 0.5, 0.2, 32);
         const material = new THREE.MeshStandardMaterial({
-            color: 0xcccccc,
-            emissive: 0x000000,
+            color: 0x222222, // Darker body so the lens pops
             metalness: 0.5,
             roughness: 0.5
         });
         this.threeObject = new THREE.Mesh(geometry, material);
         this.threeObject.userData.fixture = this;
 
-        // Add a "lens" to show the light color
+        // The glowing lens
         const lensGeometry = new THREE.CircleGeometry(0.4, 32);
-        const lensMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0x000000,
-            emissive: 0x000000
-        });
+        const lensMaterial = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0x000000 });
         const lens = new THREE.Mesh(lensGeometry, lensMaterial);
         lens.position.set(0, 0.11, 0);
         lens.rotation.x = -Math.PI / 2;
         this.threeObject.add(lens);
-        this.threeObject.lens = lens; // Save a reference
+        this.threeObject.lens = lens;
 
-        this.updateThreeObject(); // Set initial state
+        // NEW: The Actual Light Source
+        this.spotLight = new THREE.SpotLight(0xffffff, 0);
+        this.spotLight.angle = Math.PI / 6; // 30 degree beam angle
+        this.spotLight.penumbra = 0.5;      // Soft edges
+        this.spotLight.distance = 40;       // How far the light travels
+        this.spotLight.castShadow = true;
+        
+        this.spotLight.position.set(0, 0.12, 0);
+        this.spotLight.target.position.set(0, 10, 0); // Point the light 'forward' out of the lens
+        
+        this.threeObject.add(this.spotLight);
+        this.threeObject.add(this.spotLight.target); // Target must be added to the scene
+
+        this.updateThreeObject(); 
         return this.threeObject;
     }
 
@@ -61,16 +58,20 @@ class WashLight extends _BaseFixture {
 
         const { r, g, b, w, a } = this.color;
         
-        // A simple mix of RGB + Amber + White for the visual color
         const displayColor = new THREE.Color(
             (r + w + a) / (255 * 3),
             (g + w + a) / (255 * 3),
             (b + w) / (255 * 2)
         );
 
+        // Update the glowing lens
         this.threeObject.lens.material.color.copy(displayColor);
         this.threeObject.lens.material.emissive.copy(displayColor);
         this.threeObject.lens.material.emissiveIntensity = this.intensity / 255;
+
+        // NEW: Update the actual light rays hitting the floor
+        this.spotLight.color.copy(displayColor);
+        this.spotLight.intensity = (this.intensity / 255) * 15; // Multiply for Three.js brightness
     }
 
     getDmxValues() {

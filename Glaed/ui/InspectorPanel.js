@@ -1,9 +1,8 @@
-
 class InspectorPanel {
     constructor(container, programmer) {
         this.container = container;
         this.programmer = programmer;
-        this.selectedFixture = null;
+        this.selectedFixtures = []; // Now holds an array!
 
         this.init();
     }
@@ -20,31 +19,42 @@ class InspectorPanel {
         this.fixtureNameEl = this.container.querySelector('#inspector-fixture-name');
     }
 
-    /**
-     * Selects a fixture to display in the inspector.
-     * @param {object} fixture - The fixture instance to inspect.
-     */
-    selectFixture(fixture) {
-        this.selectedFixture = fixture;
-        this.fixtureNameEl.textContent = fixture ? fixture.name : 'No fixture selected';
+    // Accepts either a single fixture object or an array of them
+    selectFixture(fixtureOrArray) {
+        if (!fixtureOrArray) {
+            this.selectedFixtures = [];
+        } else if (Array.isArray(fixtureOrArray)) {
+            this.selectedFixtures = fixtureOrArray;
+        } else {
+            this.selectedFixtures = [fixtureOrArray];
+        }
+
+        if (this.selectedFixtures.length === 0) {
+            this.fixtureNameEl.textContent = 'No fixture selected';
+        } else if (this.selectedFixtures.length === 1) {
+            this.fixtureNameEl.textContent = this.selectedFixtures[0].name;
+        } else {
+            this.fixtureNameEl.textContent = `Multiple Fixtures (${this.selectedFixtures.length})`;
+        }
+        
         this.render();
     }
 
     render() {
         this.content.innerHTML = '';
-        if (!this.selectedFixture) {
-            this.content.innerHTML = '<p>Select a fixture to see its properties.</p>';
+        if (this.selectedFixtures.length === 0) {
+            this.content.innerHTML = '<p>Select a fixture or group to see its properties.</p>';
             return;
         }
 
-        // Get the current merged state from the programmer
-        const currentState = this.programmer.getMergedState(this.selectedFixture.id, this.selectedFixture);
+        // We use the first selected fixture to determine which sliders to show
+        const leadFixture = this.selectedFixtures[0];
+        const currentState = this.programmer.getMergedState(leadFixture.id, leadFixture);
 
-        // Create sliders for the fixture's main parameters
         const paramsToInspect = ['intensity', 'red', 'green', 'blue', 'white', 'amber', 'uv'];
         
         for (const param of paramsToInspect) {
-            if (this.selectedFixture[param] !== undefined || (this.selectedFixture.color && this.selectedFixture.color[param] !== undefined)) {
+            if (leadFixture[param] !== undefined || (leadFixture.color && leadFixture.color[param] !== undefined)) {
                 
                 const isColor = ['red', 'green', 'blue', 'white', 'amber', 'uv'].includes(param);
                 const value = isColor ? currentState.color[param] : currentState[param];
@@ -69,23 +79,20 @@ class InspectorPanel {
             slider.addEventListener('input', (e) => {
                 const param = e.target.dataset.param;
                 const value = parseInt(e.target.value, 10);
-
-                // Update the UI immediately
                 e.target.nextElementSibling.textContent = value;
-                
                 const isColor = ['red', 'green', 'blue', 'white', 'amber', 'uv'].includes(param);
 
-                // Update the programmer
-                if (isColor) {
-                    const newColor = { ...this.selectedFixture.color, [param]: value };
-                    this.programmer.setValue(this.selectedFixture, 'color', newColor);
-                    // Also update the fixture's base state for now for visual feedback
-                    this.selectedFixture.color[param] = value;
-                } else {
-                    this.programmer.setValue(this.selectedFixture, param, value);
-                    // Also update the fixture's base state for now for visual feedback
-                    this.selectedFixture.setParameter(param, value);
-                }
+                // Apply the change to EVERY selected fixture
+                this.selectedFixtures.forEach(fixture => {
+                    if (isColor) {
+                        const newColor = { ...fixture.color, [param]: value };
+                        this.programmer.setValue(fixture, 'color', newColor);
+                        fixture.color[param] = value;
+                    } else {
+                        this.programmer.setValue(fixture, param, value);
+                        fixture.setParameter(param, value);
+                    }
+                });
             });
         });
     }
