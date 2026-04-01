@@ -40,6 +40,13 @@ class ProfileParser {
         return parsed;
     }
 
+    static applyToFixture(fixture, parsed) {
+        fixture.channels   = parsed.channels;
+        fixture.channelMap = parsed.channelMap;
+        if (parsed.name)         fixture.name         = parsed.name;
+        if (parsed.manufacturer) fixture.manufacturer = parsed.manufacturer;
+    }
+
     static parseGDTF(xmlString) {
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(xmlString, 'text/xml');

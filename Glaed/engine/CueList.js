@@ -1,11 +1,10 @@
-class CueList {
+class CueList extends EventEmitter {
     constructor() {
+        super();
         this.cues = [];
         this.currentIndex = -1;
         this.playing = false;
         this.timelineMode = false;
-        this.onCueChange = null;
-        this.onFollow = null; // callback for auto-follow
         this.followTimer = null;
         this.timelineStart = null;
         this.timelineFrame = null;
@@ -99,9 +98,7 @@ class CueList {
             this.timelineFrame = null;
         }
         this.currentIndex = -1;
-        if (this.onCueChange) {
-            this.onCueChange(null);
-        }
+        this.emit('cueChange', null);
     }
 
     getTotalDuration() {
@@ -141,17 +138,13 @@ class CueList {
         }
 
         const cue = this.getCurrentCue();
-        if (this.onCueChange) {
-            this.onCueChange(cue);
-        }
+        this.emit('cueChange', cue);
 
         if (this.playing && cue && cue.follow) {
             const followTime = Number(cue.followTime) || 0;
             if (followTime >= 0) {
                 this.followTimer = setTimeout(() => {
-                    if (this.onFollow) {
-                        this.onFollow(cue);
-                    }
+                    this.emit('follow', cue);
                     this.go();
                 }, followTime * 1000);
             }

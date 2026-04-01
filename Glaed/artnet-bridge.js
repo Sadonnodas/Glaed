@@ -35,7 +35,7 @@ wsServer.on('connection', ws => {
         0x00, 0x0e, // Protocol Version
         0x00,       // Sequence
         0x00,       // Physical
-        (universe >> 8) & 0xff, universe & 0xff, // Universe
+        universe & 0xff, (universe >> 8) & 0xff, // Universe (little-endian)
         (data.length >> 8) & 0xff, data.length & 0xff, // Length
       ]);
 

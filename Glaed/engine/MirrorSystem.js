@@ -1,6 +1,7 @@
-class MirrorSystem {
+class MirrorSystem extends EventEmitter {
     constructor(onTick, frequency = 40) {
-        this.onTick = onTick;
+        super();
+        if (onTick) this.on('tick', onTick);
         this.frequency = frequency;
         this.intervalId = null;
         this.dirty = true;
@@ -11,7 +12,7 @@ class MirrorSystem {
         const interval = 1000 / this.frequency;
         this.intervalId = setInterval(() => {
             if (!this.dirty) return;
-            if (this.onTick) this.onTick();
+            this.emit('tick');
             this.dirty = false;
         }, interval);
     }

@@ -79,7 +79,7 @@ class StageEngine {
         const w = this.stageSize.width, d = this.stageSize.depth;
 
         const floorGeo = new THREE.PlaneGeometry(w, d);
-        const floorMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x3d2510, roughness: 0.9 });
         this.floorMesh = new THREE.Mesh(floorGeo, floorMat);
         this.floorMesh.rotation.x = -Math.PI / 2;
         this.floorMesh.receiveShadow = true;
@@ -90,7 +90,7 @@ class StageEngine {
         this.stageGroup.add(grid);
 
         const lipGeo = new THREE.BoxGeometry(w, 0.2, 0.4);
-        const lipMat = new THREE.MeshStandardMaterial({ color: 0x050505 });
+        const lipMat = new THREE.MeshStandardMaterial({ color: 0x1a0d05 });
         const lip = new THREE.Mesh(lipGeo, lipMat);
         lip.position.set(0, 0.1, d/2); 
         this.stageGroup.add(lip);

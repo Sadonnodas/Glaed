@@ -29,4 +29,16 @@ class GroupManager {
     getAll() {
         return { ...this.groups };
     }
+
+    getGroupsForFixture(fixtureId) {
+        return Object.entries(this.groups)
+            .filter(([, ids]) => ids.includes(fixtureId))
+            .map(([name]) => name);
+    }
+
+    getGroupColor(groupName) {
+        const COLORS = [0xff4466, 0x44aaff, 0x44ff88, 0xffcc22, 0xcc44ff, 0xff8833, 0x22ffdd, 0xff22cc];
+        const idx = Object.keys(this.groups).indexOf(groupName);
+        return idx >= 0 ? COLORS[idx % COLORS.length] : 0xffffff;
+    }
 }

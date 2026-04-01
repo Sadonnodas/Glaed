@@ -1,16 +1,14 @@
-
-class Programmer {
+class Programmer extends EventEmitter {
     constructor() {
+        super();
         // Stores the active programmer values.
         // The key is the fixture ID, and the value is an object of parameters.
         // e.g., { 'fixture-123': { intensity: 255, pan: 128 } }
         this.activeValues = new Map();
-        
+
         // A Map to store the original state of a fixture when it's first touched.
         // This is useful for "off" functionality, returning a fixture to its cue state.
         this.originalValues = new Map();
-
-        this.onUpdate = null; // Callback for when the programmer state changes.
     }
 
     /**
@@ -25,13 +23,11 @@ class Programmer {
             // Store original state the first time a fixture is modified
             this.originalValues.set(fixture.id, { [param]: fixture[param] });
         }
-        
+
         const fixtureParams = this.activeValues.get(fixture.id);
         fixtureParams[param] = value;
 
-        if (this.onUpdate) {
-            this.onUpdate(fixture.id, this.getValuesForFixture(fixture.id));
-        }
+        this.emit('update', fixture.id, this.getValuesForFixture(fixture.id));
     }
 
     /**
@@ -51,13 +47,11 @@ class Programmer {
         this.activeValues.clear();
         this.originalValues.clear();
         console.log('Programmer cleared.');
-        
-        if (this.onUpdate) {
-            // Notify subscribers that these fixtures are no longer in the programmer
-            affectedFixtureIds.forEach(id => this.onUpdate(id, null));
-        }
+
+        // Notify subscribers that these fixtures are no longer in the programmer
+        affectedFixtureIds.forEach(id => this.emit('update', id, null));
     }
-    
+
     /**
      * Clears only a specific fixture from the programmer.
      * @param {string} fixtureId - The ID of the fixture to clear.
@@ -66,9 +60,7 @@ class Programmer {
         if (this.activeValues.has(fixtureId)) {
             this.activeValues.delete(fixtureId);
             this.originalValues.delete(fixtureId);
-            if (this.onUpdate) {
-                this.onUpdate(fixtureId, null);
-            }
+            this.emit('update', fixtureId, null);
         }
     }
 
@@ -80,7 +72,7 @@ class Programmer {
     has(fixtureId) {
         return this.activeValues.has(fixtureId);
     }
-    
+
     /**
      * Returns a merged state of the programmer and a base cue state.
      * Programmer values take precedence (LTP - Latest Takes Precedence).
@@ -92,7 +84,7 @@ class Programmer {
         const programmerState = this.getValuesForFixture(fixtureId);
         return { ...baseState, ...programmerState };
     }
-    
+
     /**
      * Returns all fixture IDs currently in the programmer.
      * @returns {Array<string>}

@@ -18,37 +18,64 @@ class _BaseFixture {
         
         // The DMX channel layout for this fixture.
         // This should be populated by a ProfileParser based on a fixture definition file.
-        this.channels = []; 
+        this.channels = [];
         this.channelMap = {}; // e.g., { intensity: 1, red: 2, ... }
+
+        this.calibration = new Calibration();
     }
 
     /**
      * Should be implemented by subclasses to create the Three.js object.
      */
     createThreeObject() {
-        // Example: A simple box
         const geometry = new THREE.BoxGeometry(1, 1, 1);
-        const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const material = new THREE.MeshBasicMaterial({ color: 0x1a7a3a });
         this.threeObject = new THREE.Mesh(geometry, material);
-        this.threeObject.userData.fixture = this; // Link back to this fixture instance
+        this.threeObject.userData.fixture = this;
+        this._addGroupRing(0.7, 0);
         return this.threeObject;
     }
 
+    _addGroupRing(radius = 0.6, yOffset = 0) {
+        if (!this.threeObject) return;
+        const ringGeo = new THREE.TorusGeometry(radius, 0.05, 8, 32);
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = yOffset;
+        this.threeObject.add(ring);
+        this.threeObject.userData.groupRing = ring;
+    }
+
+    setGroupColor(hexColor) {
+        const ring = this.threeObject && this.threeObject.userData.groupRing;
+        if (!ring) return;
+        if (hexColor === null) {
+            ring.material.opacity = 0;
+        } else {
+            ring.material.color.setHex(hexColor);
+            ring.material.opacity = 1;
+        }
+    }
+
     /**
-     * Updates the Three.js object's appearance based on fixture state.
+     * Updates the Three.js object's appearance.
+     * @param {object} [state] - Optional state {intensity, color}. If omitted, uses this.intensity / this.color.
      */
-    updateThreeObject() {
+    updateThreeObject(state) {
         if (!this.threeObject) return;
 
-        // Example: Update material color based on intensity and color
+        const intensity = state ? state.intensity : this.intensity;
+        const color     = state ? state.color     : this.color;
+
         const emissiveColor = new THREE.Color(
-            this.color.r / 255,
-            this.color.g / 255,
-            this.color.b / 255
+            (color.r || 0) / 255,
+            (color.g || 0) / 255,
+            (color.b || 0) / 255
         );
         this.threeObject.material.emissive.copy(emissiveColor);
-        this.threeObject.material.color.copy(emissiveColor); // Use emissive for self-illumination
-        this.threeObject.material.opacity = this.intensity / 255;
+        this.threeObject.material.color.copy(emissiveColor);
+        this.threeObject.material.opacity = (intensity || 0) / 255;
     }
 
 

@@ -20,7 +20,7 @@ class WashLight extends _BaseFixture {
     createThreeObject() {
         const geometry = new THREE.CylinderGeometry(0.5, 0.5, 0.2, 32);
         const material = new THREE.MeshStandardMaterial({
-            color: 0x222222, // Darker body so the lens pops
+            color: 0x1a5c8c, // Steel blue — wash lights
             metalness: 0.5,
             roughness: 0.5
         });
@@ -49,15 +49,19 @@ class WashLight extends _BaseFixture {
         this.threeObject.add(this.spotLight);
         this.threeObject.add(this.spotLight.target); // Target must be added to the scene
 
-        this.updateThreeObject(); 
+        this._addGroupRing(0.6, 0);
+        this.updateThreeObject();
         return this.threeObject;
     }
 
-    updateThreeObject() {
+    updateThreeObject(state) {
         if (!this.threeObject) return;
 
-        const { r, g, b, w, a } = this.color;
-        
+        const color     = state ? state.color     : this.color;
+        const intensity = state ? state.intensity : this.intensity;
+
+        const { r = 0, g = 0, b = 0, w = 0, a = 0 } = color || {};
+
         const displayColor = new THREE.Color(
             (r + w + a) / (255 * 3),
             (g + w + a) / (255 * 3),
@@ -67,11 +71,11 @@ class WashLight extends _BaseFixture {
         // Update the glowing lens
         this.threeObject.lens.material.color.copy(displayColor);
         this.threeObject.lens.material.emissive.copy(displayColor);
-        this.threeObject.lens.material.emissiveIntensity = this.intensity / 255;
+        this.threeObject.lens.material.emissiveIntensity = (intensity || 0) / 255;
 
-        // NEW: Update the actual light rays hitting the floor
+        // Update the actual light rays hitting the floor
         this.spotLight.color.copy(displayColor);
-        this.spotLight.intensity = (this.intensity / 255) * 15; // Multiply for Three.js brightness
+        this.spotLight.intensity = ((intensity || 0) / 255) * 15;
     }
 
     getDmxValues() {

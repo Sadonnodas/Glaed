@@ -188,12 +188,62 @@ class FixtureLibraryPanel {
             ]
         });
 
-        const fixtures = [
-            { name: 'moving-head-generic', path: 'utils/fixtures/moving-head-generic.json' },
-            { name: 'led-par-generic', path: 'utils/fixtures/led-par-generic.json' }
-        ];
-        fixtures.forEach(f => {
-            fetch(f.path).then(res => res.text()).then(content => this.addProfileToLibrary(f.name, JSON.parse(content))).catch(e => console.error(e));
+        this.addProfileToLibrary('moving-head-generic', {
+            name: "Generic Moving Head", manufacturer: "Generic",
+            channels: [
+                { offset: 0,  name: "Pan",        type: "pan" },
+                { offset: 1,  name: "Pan Fine",    type: "pan_fine" },
+                { offset: 2,  name: "Tilt",        type: "tilt" },
+                { offset: 3,  name: "Tilt Fine",   type: "tilt_fine" },
+                { offset: 4,  name: "Dimmer",      type: "intensity" },
+                { offset: 5,  name: "Red",         type: "red" },
+                { offset: 6,  name: "Green",       type: "green" },
+                { offset: 7,  name: "Blue",        type: "blue" },
+                { offset: 8,  name: "Gobo",        type: "gobo" },
+                { offset: 9,  name: "Strobe",      type: "strobe" },
+                { offset: 10, name: "Speed",       type: "pan_tilt_speed" }
+            ],
+            modes: [{
+                name: "16ch",
+                channels: [
+                    { offset: 0,  name: "Pan",        type: "pan" },
+                    { offset: 1,  name: "Pan Fine",    type: "pan_fine" },
+                    { offset: 2,  name: "Tilt",        type: "tilt" },
+                    { offset: 3,  name: "Tilt Fine",   type: "tilt_fine" },
+                    { offset: 4,  name: "Dimmer",      type: "intensity" },
+                    { offset: 5,  name: "Red",         type: "red" },
+                    { offset: 6,  name: "Green",       type: "green" },
+                    { offset: 7,  name: "Blue",        type: "blue" },
+                    { offset: 8,  name: "Gobo",        type: "gobo" },
+                    { offset: 9,  name: "Strobe",      type: "strobe" },
+                    { offset: 10, name: "Speed",       type: "pan_tilt_speed" }
+                ]
+            }]
+        });
+
+        this.addProfileToLibrary('led-par-generic', {
+            name: "Generic LED Par", manufacturer: "Generic",
+            channels: [
+                { offset: 0, name: "Dimmer", type: "intensity" },
+                { offset: 1, name: "Red",    type: "red" },
+                { offset: 2, name: "Green",  type: "green" },
+                { offset: 3, name: "Blue",   type: "blue" },
+                { offset: 4, name: "White",  type: "white" },
+                { offset: 5, name: "Amber",  type: "amber" },
+                { offset: 6, name: "UV",     type: "uv" }
+            ],
+            modes: [{
+                name: "7ch",
+                channels: [
+                    { offset: 0, name: "Dimmer", type: "intensity" },
+                    { offset: 1, name: "Red",    type: "red" },
+                    { offset: 2, name: "Green",  type: "green" },
+                    { offset: 3, name: "Blue",   type: "blue" },
+                    { offset: 4, name: "White",  type: "white" },
+                    { offset: 5, name: "Amber",  type: "amber" },
+                    { offset: 6, name: "UV",     type: "uv" }
+                ]
+            }]
         });
     }
 
@@ -296,6 +346,7 @@ class FixtureLibraryPanel {
             this.app.stageEngine.add(obj);
             this.app.mirrorSystem.markDirty();
             this.renderTable();
+            this.refreshGroupColors();
         } catch (err) { console.error("Patch failed", err); }
     }
 
@@ -321,12 +372,26 @@ class FixtureLibraryPanel {
             return;
         }
 
+        const groupManager = this.app && this.app.groupManager;
         fixtures.forEach((f, index) => {
+            const typeColor = f instanceof MovingHead ? '#5c1a8c' : f instanceof WashLight ? '#1a5c8c' : '#1a7a3a';
+            const typeName  = f instanceof MovingHead ? 'Moving Head' : f instanceof WashLight ? 'Wash Light' : 'Generic';
+            const groups    = groupManager ? groupManager.getGroupsForFixture(f.id) : [];
+            const groupDots = groups.map(g => {
+                const c = '#' + groupManager.getGroupColor(g).toString(16).padStart(6, '0');
+                return `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${c};margin-left:3px;flex-shrink:0;" title="${g}"></span>`;
+            }).join('');
+
             const row = document.createElement('tr');
             row.style.cursor = 'pointer';
             row.innerHTML = `
                 <td>${index + 1}</td>
-                <td style="font-weight:bold; color:var(--text);">${f.name}</td>
+                <td style="font-weight:bold; color:var(--text);">
+                    <div style="display:flex;align-items:center;">
+                        <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${typeColor};margin-right:5px;flex-shrink:0;" title="${typeName}"></span>
+                        ${f.name}${groupDots}
+                    </div>
+                </td>
                 <td style="color:var(--accent); font-family:var(--font-mono);">${f.universe}.${f.address}</td>
                 <td>${f.channels.length}</td>
                 <td><button class="unpatch-btn" style="padding:2px 4px; font-size:9px; background:var(--bg-mid); border:1px solid var(--border); color:red;">X</button></td>
@@ -353,5 +418,15 @@ class FixtureLibraryPanel {
             });
             this.tableBody.appendChild(row);
         });
+    }
+
+    refreshGroupColors() {
+        const groupManager = this.app && this.app.groupManager;
+        if (!groupManager) return;
+        this.patchEngine.getAllFixtures().forEach(f => {
+            const groups = groupManager.getGroupsForFixture(f.id);
+            f.setGroupColor(groups.length > 0 ? groupManager.getGroupColor(groups[0]) : null);
+        });
+        if (this.app && this.app.mirrorSystem) this.app.mirrorSystem.markDirty();
     }
 }

@@ -78,9 +78,9 @@ class CueListPanel {
         controlsDiv.appendChild(stopButton);
         controlsDiv.appendChild(timelineToggle);
 
-        this.cueList.onCueChange = (cue) => {
+        this.cueList.on('cueChange', () => {
             this.render();
-        };
+        });
 
         this.render();
     }

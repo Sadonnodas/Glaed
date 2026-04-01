@@ -19,7 +19,7 @@ class TimelinePanel {
 
         this.render();
 
-        this.cueList.onCueChange = () => this.render();
+        this.cueList.on('cueChange', () => this.render());
         this.animate();
     }
 
@@ -150,11 +150,7 @@ class TimelinePanel {
                 cue.duration = Number(this.xToTime(newWidth).toFixed(2));
             }
 
-            if (this.cueList.onCueChange) {
-                this.cueList.onCueChange();
-            } else {
-                this.render();
-            }
+            this.render();
         };
 
         const stopDrag = () => {

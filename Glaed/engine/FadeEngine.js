@@ -8,6 +8,7 @@ class FadeEngine {
         this.delay = 0;
         this.active = false;
         this.onUpdate = null; // callback fixtureId => state
+        this.paletteManager = null; // set externally after construction
     }
 
     static _lerp(a, b, t) {
@@ -35,7 +36,19 @@ class FadeEngine {
 
         // prepare states for each fixture in cue
         for (const fixtureId in cue.data) {
-            const target = cue.data[fixtureId];
+            // Work on a shallow copy so original cue data is never mutated
+            const rawEntry = cue.data[fixtureId];
+            const entry = { ...rawEntry };
+
+            // Resolve colorPalette reference before processing
+            if (entry.colorPalette && this.paletteManager) {
+                const palette = this.paletteManager.getColorPalette(entry.colorPalette);
+                if (palette && palette.color) {
+                    entry.color = { ...palette.color };
+                    delete entry.colorPalette;
+                }
+            }
+
             const fixture = patchEngine.fixtures.find(f => f.id === fixtureId);
             const current = this.currentState.get(fixtureId);
             const base = current || (fixture ? {
@@ -46,16 +59,16 @@ class FadeEngine {
             this.startState.set(fixtureId, JSON.parse(JSON.stringify(base)));
 
             const desired = {
-                intensity: target.intensity !== undefined ? target.intensity : base.intensity,
-                color: target.color ? { ...base.color, ...target.color } : { ...base.color }
+                intensity: entry.intensity !== undefined ? entry.intensity : base.intensity,
+                color: entry.color ? { ...base.color, ...entry.color } : { ...base.color }
             };
 
-            // also allow direct rgb params in target
+            // also allow direct rgb params in entry
             ['red', 'green', 'blue', 'white', 'amber', 'uv'].forEach(ch => {
-                if (target[ch] !== undefined) {
+                if (entry[ch] !== undefined) {
                     desired.color = desired.color || { ...base.color };
                     const mapped = ch === 'red' ? 'r' : ch === 'green' ? 'g' : ch === 'blue' ? 'b' : ch === 'white' ? 'w' : ch === 'amber' ? 'a' : 'uv';
-                    desired.color[mapped] = target[ch];
+                    desired.color[mapped] = entry[ch];
                 }
             });
 
@@ -80,7 +93,7 @@ class FadeEngine {
             if (!start) return;
 
             const intensity = Math.round(FadeEngine._lerp(start.intensity || 0, target.intensity || 0, t));
-            const color = FadeEngine._lerpColor(start.color || {}, target.color || {});
+            const color = FadeEngine._lerpColor(start.color || {}, target.color || {}, t);
 
             const state = { intensity, color };
             this.currentState.set(fixtureId, state);
@@ -130,4 +143,3 @@ class FadeEngine {
         this.delay = 0;
     }
 }
-

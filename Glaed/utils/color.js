@@ -12,8 +12,8 @@ const ColorUtils = {
         h = h % 360;
         const rad = Math.PI / 180;
         const H = h * rad;
-        s = MathUtils.clamp(s, 0, 1);
-        i = MathUtils.clamp(i, 0, 1);
+        s = ColorUtils.clamp(s, 0, 1);
+        i = ColorUtils.clamp(i, 0, 1);
 
         let r = 0, g = 0, b = 0;
 

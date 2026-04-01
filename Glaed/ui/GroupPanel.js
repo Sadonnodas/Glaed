@@ -118,7 +118,11 @@ class GroupPanel {
             row.querySelector('input').addEventListener('change', (e) => {
                 if (e.target.checked) this.groupManager.addFixture(this.selectedGroup, fixture.id);
                 else this.groupManager.removeFixture(this.selectedGroup, fixture.id);
-                this.render(); // Re-render to update counts and styles
+                this.render();
+                if (this.app && this.app.panels && this.app.panels.library) {
+                    this.app.panels.library.refreshGroupColors();
+                    this.app.panels.library.renderTable();
+                }
             });
             this.groupMembersEl.appendChild(row);
         });

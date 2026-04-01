@@ -1,7 +1,80 @@
+const AUTOSAVE_KEY = 'glaed-autosave';
+
 class App {
     constructor() {
         this.panels = {};
+        this._showStartupSplash();
         this.init();
+    }
+
+    _showStartupSplash() {
+        const saved = localStorage.getItem(AUTOSAVE_KEY);
+        if (!saved) return;
+
+        try {
+            const data = JSON.parse(saved);
+            const splash = document.getElementById('startup-splash');
+            if (!splash) return;
+
+            const meta = document.getElementById('splash-meta');
+            if (meta) {
+                const fixtureCount = (data.fixtures || []).length;
+                const cueCount     = (data.cues    || []).length;
+                const savedAt      = data._savedAt ? new Date(data._savedAt).toLocaleString() : 'Unknown';
+                meta.textContent   = `"${data.showName || 'Untitled Show'}"  ·  ${fixtureCount} fixtures  ·  ${cueCount} cues  ·  Saved: ${savedAt}`;
+            }
+
+            splash.classList.add('visible');
+            this._pendingAutosave = data;
+
+            document.getElementById('splash-resume').addEventListener('click', () => {
+                splash.classList.remove('visible');
+                this._loadAutosave();
+            });
+
+            document.getElementById('splash-new').addEventListener('click', () => {
+                this._pendingAutosave = null;
+                splash.classList.remove('visible');
+            });
+
+            const fileInput = document.getElementById('splash-file-input');
+            document.getElementById('splash-load').addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    try {
+                        const data = JSON.parse(ev.target.result);
+                        this._pendingAutosave = null;
+                        splash.classList.remove('visible');
+                        // Load after a tick so app is fully initialised
+                        setTimeout(() => this.showManager && this.showManager.loadShowData(data), 100);
+                    } catch (err) { alert('Invalid show file.'); }
+                };
+                reader.readAsText(file);
+            });
+        } catch (e) {
+            // Corrupt autosave — ignore
+        }
+    }
+
+    _loadAutosave() {
+        const data = this._pendingAutosave;
+        this._pendingAutosave = null;
+        if (data && this.showManager) {
+            this.showManager.loadShowData(data);
+        }
+    }
+
+    _autoSave() {
+        try {
+            const data = this.showManager.collectShowData();
+            data._savedAt = new Date().toISOString();
+            localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(data));
+        } catch (e) {
+            console.warn('Autosave failed', e);
+        }
     }
 
     init() {
@@ -14,16 +87,20 @@ class App {
         this.groupManager = new GroupManager();
         this.paletteManager = new PaletteManager();
         this.timecodeReceiver = new TimecodeReceiver();
+        this.blackout = new BlackoutController();
+
+        // Wire paletteManager into fadeEngine for colorPalette resolution
+        this.fadeEngine.paletteManager = this.paletteManager;
 
         this.mirrorSystem = new MirrorSystem(() => {
-            this.fadeEngine.update(1 / 40); 
+            this.fadeEngine.update(1 / 40);
             if (this.fadeEngine.active) this.mirrorSystem.markDirty();
             this.sendDmx();
         });
 
         this.artnetClient = new ArtnetClient();
         this.artnetClient.connect().then(() => this.mirrorSystem.start()).catch(e => console.log(e));
-        
+
         this.midiBridge = new MidiBridge((tc) => {
             if (this.transportBar) this.transportBar.setTimecode(`MTC: ${String(tc.hours).padStart(2,'0')}:${String(tc.minutes).padStart(2,'0')}:${String(tc.seconds).padStart(2,'0')}:${String(tc.frames).padStart(2,'0')}`);
             if (this.transportBar && this.transportBar.mode === 'playback') {
@@ -33,7 +110,7 @@ class App {
         });
 
         this.stageEngine = new StageEngine(document.getElementById('stage-viewport'));
-        
+
         this.panels = {
             dmxSheet: new DmxSheet(document.getElementById('dmx-sheet')),
             inspector: new InspectorPanel(document.getElementById('inspector-panel'), this.programmer),
@@ -41,14 +118,14 @@ class App {
             palette: new PalettePanel(document.getElementById('palette-panel'), this.paletteManager),
             group: new GroupPanel(document.getElementById('group-panel'), this.patchEngine, this.groupManager, this),
             timeline: new TimelinePanel(document.getElementById('timeline-panel'), this.cueList),
-            kindle: new KindleAssistant(document.getElementById('kindle-assistant'), this.cueList, this.paletteManager),
+            kindle: new KindleAssistant(document.getElementById('kindle-assistant'), this.cueList, this.paletteManager, this.patchEngine),
             props: new PropsPanel(document.getElementById('props-panel')),
             library: new FixtureLibraryPanel(document.getElementById('fixture-library-panel'), this.patchEngine, this)
         };
 
         this.showManager = new ShowManager({
             patchEngine: this.patchEngine, stageEngine: this.stageEngine, cueList: this.cueList,
-            paletteManager: this.paletteManager, groupManager: this.groupManager, 
+            paletteManager: this.paletteManager, groupManager: this.groupManager,
             programmer: this.programmer, fadeEngine: this.fadeEngine, mirrorSystem: this.mirrorSystem,
             getPanels: () => this.panels
         });
@@ -59,12 +136,13 @@ class App {
             patchEngine: this.patchEngine, showManager: this.showManager, getPanels: () => this.panels
         });
 
-        this.timecodeReceiver.onTimecode = (tc) => this.transportBar.setTimecode(`TC: ${String(tc.hours).padStart(2,'0')}:${String(tc.minutes).padStart(2,'0')}:${String(tc.seconds).padStart(2,'0')}:${String(tc.frames).padStart(2,'0')}`);
-        
+        this.timecodeReceiver.onTimecode = (tc) => {
+            if (this.transportBar) this.transportBar.setTimecode(`TC: ${String(tc.hours).padStart(2,'0')}:${String(tc.minutes).padStart(2,'0')}:${String(tc.seconds).padStart(2,'0')}:${String(tc.frames).padStart(2,'0')}`);
+        };
+
         // Single click from 3D view
         this.stageEngine.onFixtureSelected = (fixture) => {
             this.panels.inspector.selectFixture(fixture);
-            // Don't auto-switch tabs when clicking in 3D, let the user decide.
         };
 
         // Click/Double-click from the Spreadsheet
@@ -85,20 +163,29 @@ class App {
             }
         };
 
-        this.programmer.onUpdate = () => {
+        this.programmer.on('update', () => {
             this.patchEngine.getAllFixtures().forEach(f => f.updateThreeObject());
             if (this.mirrorSystem) this.mirrorSystem.markDirty();
-        };
+        });
 
-        this.cueList.onCueChange = (cue) => {
+        this.cueList.on('cueChange', (cue) => {
             if (cue) this.fadeEngine.startCue(cue, this.patchEngine);
             this.mirrorSystem.markDirty();
             this.panels.timeline.render();
-        };
+            // Update cue name display in transport bar
+            const nameEl = document.getElementById('cue-name-display');
+            if (nameEl) nameEl.textContent = cue ? (cue.name || cue.id) : '—';
+        });
 
         this.setupTabsAndToolbar();
         this.createTestPatch();
         this.panels.library.renderTable();
+
+        // Autosave every 5 minutes
+        setInterval(() => this._autoSave(), 5 * 60 * 1000);
+
+        // Autosave on page unload
+        window.addEventListener('beforeunload', () => this._autoSave());
     }
 
     sendDmx() {
@@ -138,14 +225,14 @@ class App {
                     });
                 }
 
-                fixture.intensity = finalState.intensity;
-                fixture.color = { ...finalState.color };
-                fixture.updateThreeObject();
+                // Render 3D from state — do NOT mutate fixture.intensity or fixture.color
+                fixture.updateThreeObject(finalState);
 
                 const fixtureDmx = fixture.getDmxValuesFromState(finalState);
-                for (let i = 0; i < fixtureDmx.length; i++) {
+                const dmxBuf = this.blackout.applyToBuffer(fixtureDmx);
+                for (let i = 0; i < dmxBuf.length; i++) {
                     const channelIndex = fixture.address - 1 + i;
-                    if (channelIndex < 512 && channelIndex >= 0) dmxData[channelIndex] = fixtureDmx[i];
+                    if (channelIndex < 512 && channelIndex >= 0) dmxData[channelIndex] = dmxBuf[i];
                 }
             }
             this.artnetClient.send(universe, dmxData);
@@ -189,6 +276,44 @@ class App {
                 });
             }
         });
+
+        // BLACKOUT button
+        const blackoutBtn = document.getElementById('btn-blackout');
+        if (blackoutBtn) {
+            blackoutBtn.addEventListener('click', () => {
+                const active = this.blackout.toggle();
+                blackoutBtn.classList.toggle('blackout-active', active);
+                this.mirrorSystem.markDirty();
+            });
+        }
+
+        // KINDLE button — toggle floating panel
+        const kindleBtn = document.getElementById('btn-kindle');
+        const kindlePanel = document.getElementById('kindle-panel');
+        if (kindleBtn && kindlePanel) {
+            kindleBtn.addEventListener('click', () => {
+                kindlePanel.classList.toggle('visible');
+            });
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            const tag = document.activeElement.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+            if (e.key === 'b' || e.key === 'B') {
+                const active = this.blackout.toggle();
+                const btn = document.getElementById('btn-blackout');
+                if (btn) btn.classList.toggle('blackout-active', active);
+                this.mirrorSystem.markDirty();
+            }
+
+            if (e.key === 'h' || e.key === 'H') {
+                if (this.panels.inspector && this.panels.inspector.toggleHighlight) {
+                    this.panels.inspector.toggleHighlight();
+                }
+            }
+        });
     }
 
     createTestPatch() {
@@ -204,9 +329,8 @@ class App {
         wash2Obj.position.set(5, 5, 0); wash2Obj.rotation.x = Math.PI;
         this.stageEngine.add(wash2Obj);
 
-        this.stageEngine.addProp('human', 0xaaaaaa, {x: 0, y: 0, z: 1}); 
-        this.stageEngine.addProp('riser', 0x333333, {x: 0, y: 0, z: -2}); 
-        // Note: Curtain removed from default startup.
+        this.stageEngine.addProp('human', 0xaaaaaa, {x: 0, y: 0, z: 1});
+        this.stageEngine.addProp('riser', 0x333333, {x: 0, y: 0, z: -2});
     }
 }
 

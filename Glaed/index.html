@@ -4,26 +4,34 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Glaed — Lighting Design Workstation</title>
+
+  <!--
+    ANTHROPIC API KEY
+    Set your key in one of two ways:
+      1. Add a meta tag:  <meta name="anthropic-key" content="sk-ant-...">
+      2. Set a global:    window.ANTHROPIC_KEY = 'sk-ant-...';  (before the closing </body>)
+    The KindleAssistant reads window.ANTHROPIC_KEY first, then falls back to the meta tag.
+  -->
+
   <style>
     /* ── Reset & base ── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:         #0a0a10;
-      --bg-mid:     #12121c;
-      --bg-card:    #16161f;
-      --border:     #2a2a3a;
-      --border-dim: #1e1e2a;
-      --accent:     #ffb400; /* Amber */
-      --accent2:    #ff00ff; /* Magenta */
-      --text:       #d4d4e0;
-      --text-muted: #7878a0;
-      --text-dim:   #454560;
-      
-      --sidebar-w:  340px;
-      --timeline-h: 180px;
-      --font-mono:  'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-      --font-ui:    system-ui, -apple-system, sans-serif;
+      --bg:          #0a0a10;
+      --bg-mid:      #12121c;
+      --bg-card:     #16161f;
+      --border:      #2a2a3a;
+      --border-dim:  #1e1e2a;
+      --accent:      #ffb400;   /* amber — Glaed primary */
+      --accent2:     #ff00ff;   /* magenta — programmer values */
+      --text:        #d4d4e0;
+      --text-muted:  #7878a0;
+      --text-dim:    #454560;
+      --sidebar-w:   320px;
+      --transport-h: 52px;
+      --font-mono:   'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      --font-ui:     system-ui, -apple-system, sans-serif;
     }
 
     html, body {
@@ -36,29 +44,67 @@
       user-select: none;
     }
 
-    #app { display: flex; width: 100vw; height: 100vh; }
+    /* ── App shell ── */
+    #app {
+      display: flex;
+      flex-direction: column;
+      width: 100vw;
+      height: 100vh;
+    }
 
-    /* ── Sidebar (Left) ── */
+    /* ── Middle row: viewport + sidebar ── */
+    #workspace-row {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+    }
+
+    /* ── 3D Stage viewport ── */
+    #stage-viewport {
+      flex: 1;
+      position: relative;
+      background: #000;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    /* ── Sidebar (Right) ── */
     #sidebar {
       width: var(--sidebar-w);
       flex-shrink: 0;
-      height: 100vh;
+      height: 100%;
       background: var(--bg-mid);
-      border-right: 1px solid var(--border);
+      border-left: 1px solid var(--border);
       display: flex;
       flex-direction: column;
       z-index: 10;
+      position: relative;
+    }
+
+    /* Resize handle on left edge of sidebar */
+    #sidebar-resize-handle {
+      position: absolute;
+      left: -3px;
+      top: 0;
+      width: 6px;
+      height: 100%;
+      cursor: col-resize;
+      z-index: 20;
+    }
+    #sidebar-resize-handle:hover,
+    #sidebar-resize-handle.dragging {
+      background: color-mix(in srgb, var(--accent) 40%, transparent);
     }
 
     #sidebar-header {
-      padding: 16px 18px 12px;
+      padding: 12px 16px 10px;
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
     }
 
     #sidebar-title {
       font-family: var(--font-mono);
-      font-size: 16px;
+      font-size: 14px;
       font-weight: 600;
       letter-spacing: 3px;
       color: var(--accent);
@@ -66,59 +112,193 @@
 
     #sidebar-tagline { font-size: 10px; color: var(--text-muted); letter-spacing: 1px; margin-top: 2px; }
 
+    /* Two rows of 3 tabs */
     #sidebar-tabs {
-      display: grid; grid-template-columns: repeat(3, 1fr);
-      background: var(--bg); border-bottom: 1px solid var(--border); flex-shrink: 0;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
     }
 
     .tab-btn {
-      padding: 10px 4px; background: none; border: none; border-bottom: 2px solid transparent;
-      color: var(--text-dim); font-family: var(--font-mono); font-size: 9px; letter-spacing: 1px;
-      cursor: pointer; transition: all 0.15s;
+      padding: 9px 4px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all 0.15s;
     }
     .tab-btn:nth-child(n+4) { border-top: 1px solid var(--border-dim); }
     .tab-btn:hover { color: var(--text-muted); background: rgba(255,255,255,0.03); }
     .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
 
-    #sidebar-content { flex: 1; overflow-y: auto; padding: 16px; }
+    #sidebar-content { flex: 1; overflow-y: auto; padding: 14px; }
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
 
-    /* ── Main Workspace ── */
-    #main-workspace { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-
-    /* ── Transport Bar ── */
+    /* ── Transport bar (bottom, full width) ── */
     #transport-bar {
-      height: 48px; background: var(--bg-card); border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; padding: 0 16px; gap: 8px; font-family: var(--font-mono); flex-shrink: 0;
+      height: var(--transport-h);
+      background: var(--bg-card);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      gap: 6px;
+      font-family: var(--font-mono);
+      flex-shrink: 0;
+      overflow: hidden;
     }
 
+    /* ── Component classes ── */
     .btn {
-      background: var(--bg); border: 1px solid var(--border-dim); color: var(--text);
-      padding: 6px 10px; border-radius: 4px; font-family: var(--font-mono); font-size: 10px; cursor: pointer;
+      background: var(--bg);
+      border: 1px solid var(--border-dim);
+      color: var(--text);
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      cursor: pointer;
+      white-space: nowrap;
     }
     .btn:hover { border-color: var(--text-muted); }
-    .btn-go { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); border-color: var(--accent); font-weight: bold; }
-    .btn-clear { background: color-mix(in srgb, var(--accent2) 20%, transparent); color: var(--accent2); border-color: var(--accent2); }
+    .btn.accent {
+      background: color-mix(in srgb, var(--accent) 20%, transparent);
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+    .btn.danger {
+      background: color-mix(in srgb, #ff2222 20%, transparent);
+      color: #ff4444;
+      border-color: #ff2222;
+    }
+    .btn-row { display: flex; gap: 4px; align-items: center; }
 
-    .status-text { color: var(--accent); font-size: 11px; margin-left: auto; font-weight: bold; text-transform: uppercase;}
-    .timecode-text { color: #8adeff; font-size: 11px; font-weight: bold; }
-    .timer-text { color: var(--accent); font-size: 11px; font-weight: bold; }
+    .btn-go {
+      background: color-mix(in srgb, var(--accent) 20%, transparent);
+      color: var(--accent);
+      border-color: var(--accent);
+      font-weight: bold;
+    }
+    .btn-clear {
+      background: color-mix(in srgb, var(--accent2) 20%, transparent);
+      color: var(--accent2);
+      border-color: var(--accent2);
+    }
+    .btn-blackout {
+      background: color-mix(in srgb, #ff2222 20%, transparent);
+      color: #ff4444;
+      border-color: #ff2222;
+      font-weight: bold;
+    }
+    .btn-blackout.blackout-active {
+      background: #ff2222;
+      color: #fff;
+    }
+    .btn-kindle {
+      background: color-mix(in srgb, var(--accent) 20%, transparent);
+      color: var(--accent);
+      border-color: var(--accent);
+      margin-left: auto;
+    }
 
-    #stage-viewport { flex: 1; position: relative; background: #000; overflow: hidden; }
-    #timeline-panel { height: var(--timeline-h); background: var(--bg-mid); border-top: 1px solid var(--border); flex-shrink: 0; padding: 8px; }
+    .transport-divider {
+      width: 1px;
+      height: 24px;
+      background: var(--border);
+      flex-shrink: 0;
+    }
 
-    /* General Panel Overrides */
-    h2, h3 { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 12px; letter-spacing: 1px; border-bottom: 1px solid var(--border); padding-bottom: 4px;}
-    input, select { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 6px 8px; font-family: var(--font-mono); font-size: 10px; border-radius: 4px; width: 100%; margin-bottom: 8px;}
-    button { background: var(--bg-card); border: 1px solid var(--border); color: var(--text); padding: 4px 8px; cursor: pointer; border-radius: 3px;}
-    button:hover { background: var(--border); }
-    
+    .cue-name-display {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--accent);
+      font-weight: bold;
+      min-width: 100px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .timecode-text { color: #8adeff; font-size: 11px; font-weight: bold; white-space: nowrap; }
+    .timer-text { color: var(--accent); font-size: 11px; font-weight: bold; white-space: nowrap; }
+    .status-text { color: var(--accent); font-size: 11px; font-weight: bold; text-transform: uppercase; white-space: nowrap; }
+
+    /* ── Section / card components ── */
+    .section { margin-bottom: 16px; }
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 1.5px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-dim);
+      border-radius: 6px;
+      padding: 12px;
+    }
+    .divider { height: 1px; background: var(--border-dim); margin: 10px 0; }
+    .empty-state {
+      text-align: center;
+      padding: 24px 12px;
+      color: var(--text-dim);
+      font-size: 11px;
+      font-family: var(--font-mono);
+    }
+
+    /* Slider components */
+    .slider-field { margin-bottom: 8px; }
+    .slider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
+    .slider-label { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
+    .slider-value { font-size: 10px; color: var(--accent); font-family: var(--font-mono); font-weight: bold; }
+
+    /* ── Thin scrollbars ── */
     ::-webkit-scrollbar { width: 4px; height: 4px; }
     ::-webkit-scrollbar-track { background: var(--bg-mid); }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-    /* Patch Table Styles */
+    /* ── General panel overrides ── */
+    h2, h3 {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      letter-spacing: 1px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 4px;
+    }
+    input, select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 8px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      border-radius: 4px;
+      width: 100%;
+      margin-bottom: 8px;
+    }
+    button {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 4px 8px;
+      cursor: pointer;
+      border-radius: 3px;
+    }
+    button:hover { background: var(--border); }
+
+    /* Patch table */
     .patch-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 11px; }
     .patch-table th { background: var(--bg-card); padding: 8px 4px; color: var(--text-muted); font-family: var(--font-mono); border-bottom: 1px solid var(--border); font-weight: normal; }
     .patch-table td { padding: 8px 4px; border-bottom: 1px solid var(--border-dim); color: var(--text-muted); }
@@ -127,85 +307,234 @@
     .patch-controls select { flex: 2; min-width: 0; }
     .patch-controls input { flex: 1; min-width: 0; padding: 4px; text-align: center; }
 
-    /* Floating Toolbar */
+    /* Floating toolbar */
     .tool-btn.active { background: var(--accent); color: #000; }
+
+    /* ── Startup splash dialog ── */
+    #startup-splash {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    #startup-splash.visible { display: flex; }
+    .splash-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 28px 32px;
+      width: 380px;
+      font-family: var(--font-mono);
+    }
+    .splash-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 3px;
+      margin-bottom: 6px;
+    }
+    .splash-subtitle { font-size: 11px; color: var(--text-muted); margin-bottom: 20px; }
+    .splash-meta { font-size: 10px; color: var(--text-dim); margin-bottom: 20px; line-height: 1.7; }
+    .splash-buttons { display: flex; flex-direction: column; gap: 8px; }
+    .splash-btn {
+      width: 100%; padding: 10px; border-radius: 4px; font-family: var(--font-mono);
+      font-size: 11px; cursor: pointer; border: 1px solid var(--border); background: var(--bg);
+      color: var(--text); text-align: left;
+    }
+    .splash-btn:hover { border-color: var(--text-muted); background: var(--bg-mid); }
+    .splash-btn.primary {
+      background: color-mix(in srgb, var(--accent) 15%, transparent);
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    /* ── KindleAssistant floating panel ── */
+    #kindle-panel {
+      display: none;
+      position: fixed;
+      bottom: calc(var(--transport-h) + 12px);
+      right: calc(var(--sidebar-w) + 12px);
+      width: 400px;
+      max-height: 520px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      z-index: 500;
+      flex-direction: column;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    }
+    #kindle-panel.visible { display: flex; }
+    #kindle-panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      cursor: move;
+      flex-shrink: 0;
+    }
+    #kindle-panel-title {
+      font-family: var(--font-mono); font-size: 11px; font-weight: bold;
+      color: var(--accent); letter-spacing: 1px;
+    }
+    #kindle-panel-close {
+      background: none; border: none; color: var(--text-muted); cursor: pointer;
+      font-size: 16px; padding: 0 4px; line-height: 1;
+    }
+    #kindle-panel-close:hover { color: var(--text); background: none; }
+    #kindle-chat {
+      flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px;
+    }
+    .kindle-msg {
+      padding: 8px 10px; border-radius: 6px; font-size: 11px; line-height: 1.5;
+      max-width: 90%;
+    }
+    .kindle-msg.user {
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+      color: var(--accent); align-self: flex-end; border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    }
+    .kindle-msg.assistant {
+      background: var(--bg-mid); color: var(--text); align-self: flex-start;
+      border: 1px solid var(--border-dim);
+    }
+    .kindle-cue-actions { display: flex; gap: 6px; margin-top: 6px; }
+    #kindle-input-row {
+      display: flex; gap: 6px; padding: 10px 12px;
+      border-top: 1px solid var(--border); flex-shrink: 0; align-items: flex-end;
+    }
+    #kindle-input {
+      flex: 1; resize: none; height: 56px; background: var(--bg); border: 1px solid var(--border);
+      color: var(--text); padding: 6px 8px; font-family: var(--font-mono); font-size: 10px;
+      border-radius: 4px;
+    }
+    #kindle-send {
+      background: color-mix(in srgb, var(--accent) 20%, transparent);
+      color: var(--accent); border: 1px solid var(--accent);
+      padding: 8px 12px; border-radius: 4px; font-family: var(--font-mono);
+      font-size: 10px; cursor: pointer; align-self: flex-end;
+    }
+    #kindle-send:disabled { opacity: 0.4; cursor: not-allowed; }
+    .kindle-spinner { text-align: center; color: var(--text-muted); font-size: 10px; padding: 8px; }
   </style>
 </head>
 <body>
 
-<div id="app">
-  <div id="sidebar">
-    <div id="sidebar-header">
-      <div id="sidebar-title">GLAED</div>
-      <div id="sidebar-tagline">Lighting Design Workstation</div>
+<!-- ── Startup splash ── -->
+<div id="startup-splash">
+  <div class="splash-card">
+    <div class="splash-title">GLAED</div>
+    <div class="splash-subtitle">Lighting Design Workstation</div>
+    <div class="splash-meta" id="splash-meta">Loading saved show…</div>
+    <div class="splash-buttons">
+      <button class="splash-btn primary" id="splash-resume">Resume last show</button>
+      <button class="splash-btn" id="splash-new">New show</button>
+      <button class="splash-btn" id="splash-load">Load show file…</button>
     </div>
-
-    <div id="sidebar-tabs">
-      <button class="tab-btn active" data-tab="patch">LIBRARY</button>
-      <button class="tab-btn" data-tab="props">PROPS</button>
-      <button class="tab-btn" data-tab="groups">GROUPS</button>
-      <button class="tab-btn" data-tab="palettes">PALETTES</button>
-      <button class="tab-btn" data-tab="cues">CUES</button>
-      <button class="tab-btn" data-tab="inspector">INSPECT</button>
-      <button class="tab-btn" data-tab="dmx">DMX</button>
-      <button class="tab-btn" data-tab="ai" style="grid-column: span 2; color: var(--accent);">KINDLE ASSISTANT</button>
-    </div>
-
-    <div id="sidebar-content">
-      <div class="tab-panel active" id="tab-patch"><div id="fixture-library-panel"></div></div>
-      <div class="tab-panel" id="tab-props"><div id="props-panel"></div></div>
-      <div class="tab-panel" id="tab-groups"><div id="group-panel"></div></div>
-      <div class="tab-panel" id="tab-palettes"><div id="palette-panel"></div></div>
-      <div class="tab-panel" id="tab-cues"><div id="cue-list-panel"></div></div>
-      <div class="tab-panel" id="tab-inspector"><div id="inspector-panel"></div></div>
-      <div class="tab-panel" id="tab-dmx"><div id="dmx-sheet"></div></div>
-      <div class="tab-panel" id="tab-ai"><div id="kindle-assistant"></div></div>
-    </div>
-  </div>
-
-  <div id="main-workspace">
-    <div id="transport-bar">
-      <button class="btn btn-go" id="btn-go">GO</button>
-      <button class="btn" id="btn-back">BACK</button>
-      <div style="width: 1px; height: 24px; background: var(--border); margin: 0 4px;"></div>
-      <button class="btn" id="btn-play">PLAY</button>
-      <button class="btn" id="btn-pause">PAUSE</button>
-      <button class="btn" id="btn-stop">STOP</button>
-      
-      <div style="width: 1px; height: 24px; background: var(--border); margin: 0 4px;"></div>
-      <button class="btn" id="btn-save">SAVE</button>
-      <button class="btn" id="btn-load">LOAD</button>
-      <input type="file" id="show-file-input" accept=".json" style="display:none" />
-      
-      <div style="width: 1px; height: 24px; background: var(--border); margin: 0 4px;"></div>
-      <button class="btn btn-clear" id="btn-clear">CLEAR</button>
-      <button class="btn" id="btn-record">RECORD</button>
-      
-      <button class="btn" id="btn-mirror-toggle">Mirror: ON</button>
-      
-      <select id="mode-select" style="width: auto; margin: 0;">
-         <option value="design">Design</option>
-         <option value="live">Live</option>
-         <option value="playback">Playback</option>
-      </select>
-
-      <span class="status-text" id="transport-status">Live</span>
-      <span class="timecode-text" id="timecode-status">TC: --:--:--:--</span>
-      <span class="timer-text" id="show-timer">Elapsed: 00:00</span>
-    </div>
-
-    <div id="stage-viewport">
-        <div style="position:absolute; top:10px; right:10px; z-index:100; display:flex; gap:4px; background:var(--bg-card); padding:4px; border:1px solid var(--border); border-radius:4px;">
-            <button id="tool-worklights" class="btn tool-btn" style="color: #ffcc00; border-color: #ffcc00; margin-right: 8px;">💡 Work Lights: ON</button>
-            <button id="tool-move" class="btn tool-btn active">Move (T)</button>
-            <button id="tool-rotate" class="btn tool-btn">Rotate (R)</button>
-            <button id="tool-scale" class="btn tool-btn">Scale (S)</button>
-        </div>
-    </div>
-    
-    <div id="timeline-panel"></div>
   </div>
 </div>
+<input type="file" id="splash-file-input" accept=".json" style="display:none" />
+
+<!-- ── KindleAssistant floating panel ── -->
+<div id="kindle-panel">
+  <div id="kindle-panel-header">
+    <span id="kindle-panel-title">✦ KINDLE ASSISTANT</span>
+    <button id="kindle-panel-close">✕</button>
+  </div>
+  <div id="kindle-chat"></div>
+  <div id="kindle-input-row">
+    <textarea id="kindle-input" placeholder="Describe your scene…"></textarea>
+    <button id="kindle-send">Send</button>
+  </div>
+</div>
+
+<!-- ── Main app ── -->
+<div id="app">
+
+  <!-- Middle row: viewport + sidebar -->
+  <div id="workspace-row">
+
+    <!-- 3D Stage viewport -->
+    <div id="stage-viewport">
+      <div style="position:absolute; top:10px; left:10px; z-index:100; display:flex; gap:4px; background:var(--bg-card); padding:4px; border:1px solid var(--border); border-radius:4px;">
+        <button id="tool-worklights" class="btn tool-btn" style="color: #ffcc00; border-color: #ffcc00; margin-right: 8px;">💡 Work Lights: ON</button>
+        <button id="tool-move" class="btn tool-btn active">Move (T)</button>
+        <button id="tool-rotate" class="btn tool-btn">Rotate (R)</button>
+        <button id="tool-scale" class="btn tool-btn">Scale (S)</button>
+      </div>
+    </div>
+
+    <!-- Sidebar (right) -->
+    <div id="sidebar">
+      <div id="sidebar-resize-handle"></div>
+
+      <div id="sidebar-header">
+        <div id="sidebar-title">GLAED</div>
+        <div id="sidebar-tagline">Lighting Design Workstation</div>
+      </div>
+
+      <!-- Two rows of 3 tabs -->
+      <div id="sidebar-tabs">
+        <button class="tab-btn active" data-tab="patch">PATCH</button>
+        <button class="tab-btn" data-tab="groups">GROUPS</button>
+        <button class="tab-btn" data-tab="palettes">PALETTES</button>
+        <button class="tab-btn" data-tab="cues">CUES</button>
+        <button class="tab-btn" data-tab="inspector">INSPECT</button>
+        <button class="tab-btn" data-tab="dmx">DMX</button>
+      </div>
+
+      <div id="sidebar-content">
+        <div class="tab-panel active" id="tab-patch"><div id="fixture-library-panel"></div></div>
+        <div class="tab-panel" id="tab-groups"><div id="group-panel"></div></div>
+        <div class="tab-panel" id="tab-palettes"><div id="palette-panel"></div></div>
+        <div class="tab-panel" id="tab-cues"><div id="cue-list-panel"></div></div>
+        <div class="tab-panel" id="tab-inspector"><div id="inspector-panel"></div></div>
+        <div class="tab-panel" id="tab-dmx"><div id="dmx-sheet"></div></div>
+      </div>
+    </div>
+
+  </div><!-- /#workspace-row -->
+
+  <!-- Transport bar (full width, bottom) -->
+  <div id="transport-bar">
+    <button class="btn btn-blackout" id="btn-blackout">■ BLACKOUT</button>
+    <div class="transport-divider"></div>
+    <button class="btn btn-go" id="btn-go">GO</button>
+    <button class="btn" id="btn-back">BACK</button>
+    <div class="transport-divider"></div>
+    <button class="btn" id="btn-play">▶ PLAY</button>
+    <button class="btn" id="btn-pause">⏸ PAUSE</button>
+    <button class="btn" id="btn-stop">⏹ STOP</button>
+    <div class="transport-divider"></div>
+    <span class="cue-name-display" id="cue-name-display">—</span>
+    <div class="transport-divider"></div>
+    <button class="btn btn-clear" id="btn-clear">CLEAR</button>
+    <button class="btn" id="btn-record">⏺ RECORD</button>
+    <div class="transport-divider"></div>
+    <button class="btn" id="btn-save">SAVE</button>
+    <button class="btn" id="btn-load">LOAD</button>
+    <input type="file" id="show-file-input" accept=".json" style="display:none" />
+    <div class="transport-divider"></div>
+    <button class="btn" id="btn-mirror-toggle">Mirror: ON</button>
+    <select id="mode-select" style="width:auto; margin:0;">
+      <option value="design">Design</option>
+      <option value="live">Live</option>
+      <option value="playback">Playback</option>
+    </select>
+    <div class="transport-divider"></div>
+    <span class="timecode-text" id="timecode-status">TC: --:--:--:--</span>
+    <span class="timer-text" id="show-timer">· Elapsed: 00:00</span>
+    <button class="btn btn-kindle" id="btn-kindle">✦ KINDLE</button>
+  </div>
+
+</div><!-- /#app -->
+
+<!-- Hidden panel for KindleAssistant (in sidebar) -->
+<div style="display:none"><div id="kindle-assistant"></div></div>
+<!-- Hidden panel for Timeline -->
+<div style="display:none"><div id="timeline-panel"></div></div>
+<!-- Hidden panel for Props -->
+<div style="display:none"><div id="props-panel"></div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -217,6 +546,7 @@
 <script src="hardware/TimecodeReceiver.js"></script>
 <script src="hardware/MidiBridge.js"></script>
 
+<script src="engine/EventEmitter.js"></script>
 <script src="engine/ShowManager.js"></script>
 <script src="engine/ArtnetClient.js"></script>
 <script src="engine/PatchEngine.js"></script>
@@ -227,11 +557,13 @@
 <script src="engine/GroupManager.js"></script>
 <script src="engine/PaletteManager.js"></script>
 <script src="engine/StageEngine.js"></script>
+<script src="engine/BlackoutController.js"></script>
 
 <script src="fixtures/_BaseFixture.js"></script>
 <script src="fixtures/WashLight.js"></script>
 <script src="fixtures/MovingHead.js"></script>
 <script src="fixtures/ProfileParser.js"></script>
+<script src="fixtures/Calibration.js"></script>
 
 <script src="ui/TransportBar.js"></script>
 <script src="ui/PropsPanel.js"></script>
@@ -244,6 +576,47 @@
 <script src="ui/CueListPanel.js"></script>
 <script src="ui/TimelinePanel.js"></script>
 <script src="ui/App.js"></script>
+
+<!-- Sidebar resize logic -->
+<script>
+(function() {
+  const STORAGE_KEY = 'glaed-sidebar-w';
+  const sidebar = document.getElementById('sidebar');
+  const handle = document.getElementById('sidebar-resize-handle');
+  const MIN_W = 260, MAX_W = 560;
+
+  const saved = parseInt(localStorage.getItem(STORAGE_KEY), 10);
+  if (saved && saved >= MIN_W && saved <= MAX_W) {
+    sidebar.style.width = saved + 'px';
+    document.documentElement.style.setProperty('--sidebar-w', saved + 'px');
+  }
+
+  let dragging = false, startX = 0, startW = 0;
+
+  handle.addEventListener('mousedown', (e) => {
+    dragging = true;
+    startX = e.clientX;
+    startW = sidebar.offsetWidth;
+    handle.classList.add('dragging');
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const delta = startX - e.clientX; // handle is on the LEFT edge
+    const newW = Math.max(MIN_W, Math.min(MAX_W, startW + delta));
+    sidebar.style.width = newW + 'px';
+    document.documentElement.style.setProperty('--sidebar-w', newW + 'px');
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('dragging');
+    localStorage.setItem(STORAGE_KEY, sidebar.offsetWidth);
+  });
+})();
+</script>
 
 </body>
 </html>

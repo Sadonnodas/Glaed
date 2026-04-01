@@ -3,6 +3,10 @@ class MidiBridge {
         this.onTimecode = onTimecode;
         this.midiAccess = null;
         this.input = null;
+
+        // MTC quarter-frame accumulator
+        this._mtcNibbles = new Array(8).fill(0);
+        this._mtcCount   = 0;
     }
 
     async connect() {
@@ -37,19 +41,27 @@ class MidiBridge {
     }
 
     handleMidiMessage(message) {
-        const [status, data1, data2] = message.data;
+        const [status, data1] = message.data;
 
-        // MTC Quarter Frame messages (0xF1)
+        // MTC Quarter Frame messages (0xF1) — accumulate 8 nibbles to form full timecode
         if (status === 0xF1) {
-            // Basic MTC parsing (simplified)
-            // In real implementation, accumulate frames to build timecode
-            const frame = data1 & 0x0F;
-            const seconds = (data1 >> 4) & 0x03;
-            const minutes = data2 & 0x3F;
-            const hours = (data2 >> 6) & 0x1F;
-
-            if (this.onTimecode) {
-                this.onTimecode({ hours, minutes, seconds, frames: frame });
+            const piece = data1 & 0x0f;
+            const type  = (data1 >> 4) & 0x07;
+            this._mtcNibbles[type] = piece;
+            this._mtcCount++;
+            if (this._mtcCount >= 8) {
+                this._mtcCount = 0;
+                const n = this._mtcNibbles;
+                const frames  = n[0] | (n[1] << 4);
+                const seconds = n[2] | (n[3] << 4);
+                const minutes = n[4] | (n[5] << 4);
+                const hours   = n[6] | ((n[7] & 0x01) << 4);
+                if (this.onTimecode) {
+                    this.onTimecode({
+                        hours, minutes, seconds, frames,
+                        totalSeconds: hours * 3600 + minutes * 60 + seconds + frames / 30
+                    });
+                }
             }
         }
     }
