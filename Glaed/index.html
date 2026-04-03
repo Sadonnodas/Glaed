@@ -469,7 +469,10 @@
       <div id="sidebar-resize-handle"></div>
 
       <div id="sidebar-header">
-        <div id="sidebar-title">GLAED</div>
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+          <div id="sidebar-title">GLAED</div>
+          <input id="show-name-input" placeholder="Untitled Show" style="flex:1; margin:0; font-size:10px; padding:3px 6px; background:var(--bg); border:1px solid var(--border-dim); color:var(--accent); font-family:var(--font-mono);" />
+        </div>
         <div id="sidebar-tagline">Lighting Design Workstation</div>
       </div>
 
@@ -484,10 +487,10 @@
       </div>
 
       <div id="sidebar-content">
-        <div class="tab-panel active" id="tab-patch"><div id="fixture-library-panel"></div></div>
+        <div class="tab-panel active" id="tab-patch"><div id="fixture-library-panel"></div><div style="border-top:1px solid var(--border-dim); margin-top:12px; padding-top:12px;"><div id="props-panel"></div></div></div>
         <div class="tab-panel" id="tab-groups"><div id="group-panel"></div></div>
         <div class="tab-panel" id="tab-palettes"><div id="palette-panel"></div></div>
-        <div class="tab-panel" id="tab-cues"><div id="cue-list-panel"></div></div>
+        <div class="tab-panel" id="tab-cues"><div id="cue-list-panel"></div><div style="border-top:1px solid var(--border-dim); margin-top:12px; padding-top:4px;"><div id="timeline-panel"></div></div></div>
         <div class="tab-panel" id="tab-inspector"><div id="inspector-panel"></div></div>
         <div class="tab-panel" id="tab-dmx"><div id="dmx-sheet"></div></div>
       </div>
@@ -524,6 +527,8 @@
     <div class="transport-divider"></div>
     <span class="timecode-text" id="timecode-status">TC: --:--:--:--</span>
     <span class="timer-text" id="show-timer">· Elapsed: 00:00</span>
+    <div class="transport-divider"></div>
+    <span class="status-text" id="transport-status" style="min-width:80px; color:var(--text-muted);">Ready</span>
     <button class="btn btn-kindle" id="btn-kindle">✦ KINDLE</button>
   </div>
 
@@ -531,10 +536,6 @@
 
 <!-- Hidden panel for KindleAssistant (in sidebar) -->
 <div style="display:none"><div id="kindle-assistant"></div></div>
-<!-- Hidden panel for Timeline -->
-<div style="display:none"><div id="timeline-panel"></div></div>
-<!-- Hidden panel for Props -->
-<div style="display:none"><div id="props-panel"></div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>

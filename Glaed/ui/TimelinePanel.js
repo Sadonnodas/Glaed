@@ -8,7 +8,12 @@ class TimelinePanel {
 
     init() {
         this.container.innerHTML = `
-            <div class="timeline-header"><h3>Timeline</h3></div>
+            <div class="timeline-header" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                <h3 style="margin:0; border:none; padding:0;">Timeline</h3>
+                <label style="display:flex; align-items:center; gap:4px; font-size:9px; color:var(--text-dim); font-family:var(--font-mono); cursor:pointer;">
+                    <input type="checkbox" id="timeline-mode-toggle" style="width:auto; margin:0;" /> Timeline Mode
+                </label>
+            </div>
             <div class="timeline-content" id="timeline-content"></div>
             <p id="timeline-hint" style="color:#aaa;font-size:12px;margin:4px 0;">Drag bars to reposition cues; drag right edge to resize.</p>
         `;
@@ -16,6 +21,14 @@ class TimelinePanel {
         this.content = this.container.querySelector('#timeline-content');
         this.timelineHint = this.container.querySelector('#timeline-hint');
         this.dragState = null; // {mode, cueIndex, offsetX, startTime, startDuration}
+
+        const modeToggle = this.container.querySelector('#timeline-mode-toggle');
+        if (modeToggle) {
+            modeToggle.checked = !!this.cueList.timelineMode;
+            modeToggle.addEventListener('change', () => {
+                this.cueList.setTimelineMode(modeToggle.checked);
+            });
+        }
 
         this.render();
 
@@ -92,10 +105,17 @@ class TimelinePanel {
 
         // Draw playhead
         if (this.cueList.playing) {
-            const currentCue = this.cueList.getCurrentCue();
-            const activeStart = currentCue ? Number(currentCue.startTime ?? this.cueList.currentIndex * 4) : 0;
-            const roll = (Date.now() % (this.cueList.getCurrentCue()?.duration * 1000 || 4000)) / 1000;
-            const playheadX = this.timeToX(activeStart + roll);
+            let playheadX;
+            if (this.cueList.timelineStart != null) {
+                // Timeline mode: track real elapsed time from playback start
+                const elapsed = (Date.now() - this.cueList.timelineStart) / 1000;
+                playheadX = this.timeToX(elapsed);
+            } else {
+                // Sequential mode: show playhead at start of current cue
+                const currentCue = this.cueList.getCurrentCue();
+                const activeStart = currentCue ? Number(currentCue.startTime ?? this.cueList.currentIndex * 4) : 0;
+                playheadX = this.timeToX(activeStart);
+            }
             ctx.strokeStyle = '#ff0000';
             ctx.lineWidth = 2;
             ctx.beginPath();

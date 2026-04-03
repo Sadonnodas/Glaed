@@ -64,8 +64,10 @@ class TransportBar {
                 if (!file) return;
                 const reader = new FileReader();
                 reader.onload = (e) => {
-                    try { this.showManager.loadShow(e.target.result, this); } 
-                    catch (err) { console.error(err); this.setStatus('Load failed'); }
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        this.showManager.loadShowData(data, this);
+                    } catch (err) { console.error(err); this.setStatus('Load failed'); }
                 };
                 reader.readAsText(file);
                 fileInput.value = '';

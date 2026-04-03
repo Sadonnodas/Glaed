@@ -50,23 +50,45 @@ class PalettePanel {
         palettes.forEach((palette) => {
             const row = document.createElement('div');
             row.className = 'palette-item';
-            row.innerHTML = `
-                <span style="background:${this.rgbToCss(palette.color)}" class="palette-swatch"></span>
-                <span class="palette-name">${palette.name}</span>
-                <button class="palette-use">Use</button>
-            `;
+            row.style.cssText = 'display:flex; align-items:center; gap:6px; padding:4px 0; border-bottom:1px solid var(--border-dim);';
 
-            const useBtn = row.querySelector('.palette-use');
+            const swatch = document.createElement('span');
+            swatch.style.cssText = `display:inline-block; width:14px; height:14px; border-radius:3px; background:${this.rgbToCss(palette.color)}; flex-shrink:0; border:1px solid var(--border);`;
+
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = palette.name;
+            nameSpan.style.cssText = 'flex:1; font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+
+            const useBtn = document.createElement('button');
+            useBtn.textContent = 'Use';
+            useBtn.style.cssText = 'font-size:9px; padding:2px 6px; flex-shrink:0;';
             useBtn.addEventListener('click', () => {
                 this.selectedPaletteId = palette.id;
                 this.onPaletteSelected && this.onPaletteSelected(palette);
-               this.render();
+                this.render();
+            });
+
+            const delBtn = document.createElement('button');
+            delBtn.textContent = '✕';
+            delBtn.style.cssText = 'font-size:9px; padding:2px 5px; flex-shrink:0; background:none; border:1px solid transparent; color:var(--text-dim);';
+            delBtn.addEventListener('mouseenter', () => { delBtn.style.color = '#f44'; delBtn.style.borderColor = '#f44'; });
+            delBtn.addEventListener('mouseleave', () => { delBtn.style.color = 'var(--text-dim)'; delBtn.style.borderColor = 'transparent'; });
+            delBtn.addEventListener('click', () => {
+                this.paletteManager.removeColorPalette(palette.id);
+                if (this.selectedPaletteId === palette.id) this.selectedPaletteId = null;
+                this.render();
             });
 
             if (this.selectedPaletteId === palette.id) {
-                row.classList.add('active');
+                row.style.background = 'color-mix(in srgb, var(--accent) 8%, transparent)';
+                useBtn.style.color = 'var(--accent)';
+                useBtn.style.borderColor = 'var(--accent)';
             }
 
+            row.appendChild(swatch);
+            row.appendChild(nameSpan);
+            row.appendChild(useBtn);
+            row.appendChild(delBtn);
             this.listEl.appendChild(row);
         });
     }

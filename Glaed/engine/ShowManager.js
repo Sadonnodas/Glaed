@@ -4,7 +4,9 @@ class ShowManager {
     }
 
     collectShowData() {
+        const nameEl = document.getElementById('show-name-input');
         return {
+            showName: nameEl ? nameEl.value.trim() || 'Untitled Show' : 'Untitled Show',
             createdAt: new Date().toISOString(),
             mode: this.mode || 'live',
             fixtures: this.patchEngine.getAllFixtures().map(f => ({
@@ -18,7 +20,9 @@ class ShowManager {
                 color: { ...f.color },
                 channels: f.channels,
                 channelMap: f.channelMap,
-                position: f.threeObject ? { x: f.threeObject.position.x, y: f.threeObject.position.y, z: f.threeObject.position.z } : null
+                position: f.threeObject ? { x: f.threeObject.position.x, y: f.threeObject.position.y, z: f.threeObject.position.z } : null,
+                rotation: f.threeObject ? { x: f.threeObject.rotation.x, y: f.threeObject.rotation.y, z: f.threeObject.rotation.z } : null,
+                calibration: f.calibration ? f.calibration.toJSON() : null
             })),
             cues: this.cueList.cues,
             palettes: {
@@ -84,8 +88,7 @@ class ShowManager {
         if (panels.dmxSheet) panels.dmxSheet.updateData(new Array(512).fill(0));
     }
 
-    loadShow(jsonString, transportBar) {
-        const data = JSON.parse(jsonString);
+    loadShowData(data, transportBar) {
         this.resetShow();
 
         if (data.mode && transportBar) {
@@ -106,10 +109,16 @@ class ShowManager {
             fixture.color = { ...fixtureData.color };
             fixture.channels = fixtureData.channels || fixture.channels;
             fixture.channelMap = fixtureData.channelMap || fixture.channelMap;
+            if (fixtureData.calibration && fixture.calibration) {
+                fixture.calibration.fromJSON(fixtureData.calibration);
+            }
 
             const obj = fixture.createThreeObject();
             if (fixtureData.position && obj) {
                 obj.position.set(fixtureData.position.x, fixtureData.position.y, fixtureData.position.z);
+            }
+            if (fixtureData.rotation && obj) {
+                obj.rotation.set(fixtureData.rotation.x, fixtureData.rotation.y, fixtureData.rotation.z);
             }
             if (this.stageEngine) this.stageEngine.add(obj);
 
@@ -130,12 +139,25 @@ class ShowManager {
         }
 
         const panels = this.getPanels();
-        if (panels.cueList) panels.cueList.render();
+        if (panels.cueList)  panels.cueList.render();
         if (panels.timeline) panels.timeline.render();
-        if (panels.palette) panels.palette.render();
-        if (panels.group) panels.group.render();
+        if (panels.palette)  panels.palette.render();
+        if (panels.group)    panels.group.render();
+        if (panels.library)  {
+            panels.library.renderTable();
+            panels.library.refreshGroupColors();
+        }
+
+        // Restore show name in transport bar input
+        const nameEl = document.getElementById('show-name-input');
+        if (nameEl && data.showName) nameEl.value = data.showName;
 
         if (transportBar) transportBar.setStatus('Show loaded');
         this.mirrorSystem.markDirty();
+    }
+
+    loadShow(jsonString, transportBar) {
+        const data = JSON.parse(jsonString);
+        this.loadShowData(data, transportBar);
     }
 }

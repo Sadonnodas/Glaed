@@ -12,6 +12,7 @@ class KindleAssistant {
         this._closeBtn = document.getElementById('kindle-panel-close');
         this._panel = document.getElementById('kindle-panel');
         this._header = document.getElementById('kindle-panel-header');
+        this._history = []; // multi-turn conversation messages
 
         if (!this._chat) return; // Panel not in DOM yet
 
@@ -32,6 +33,17 @@ class KindleAssistant {
                 this._panel.classList.remove('visible');
             });
         }
+
+        // Clear history button
+        const clearBtn = document.createElement('button');
+        clearBtn.textContent = 'Clear';
+        clearBtn.style.cssText = 'background:none; border:none; color:var(--text-dim); font-size:9px; cursor:pointer; padding:0 4px;';
+        clearBtn.addEventListener('click', () => {
+            this._history = [];
+            this._chat.innerHTML = '';
+        });
+        const header = document.getElementById('kindle-panel-header');
+        if (header) header.insertBefore(clearBtn, this._closeBtn);
     }
 
     _initDrag() {
@@ -131,21 +143,24 @@ class KindleAssistant {
 
         this._input.value = '';
         this._addMessage('user', prompt);
+        this._history.push({ role: 'user', content: prompt });
         this._sendBtn.disabled = true;
         const spinner = this._addSpinner();
 
         try {
-            const cue = await this._generate(prompt, key);
+            const { cue, rawText } = await this._generate(key);
+            this._history.push({ role: 'assistant', content: rawText });
             this._addCuePreview(cue, spinner);
         } catch (e) {
             if (spinner) spinner.remove();
             this._addMessage('assistant', `Error: ${e.message}`);
+            this._history.push({ role: 'assistant', content: `Error: ${e.message}` });
         } finally {
             this._sendBtn.disabled = false;
         }
     }
 
-    async _generate(prompt, apiKey) {
+    async _generate(apiKey) {
         const fixtures = (this.patchEngine ? this.patchEngine.getAllFixtures() : []).map(f => ({
             id: f.id, name: f.name, type: f.constructor.name,
             channels: Object.keys(f.channelMap || {})
@@ -185,9 +200,9 @@ Return ONLY the JSON object, no explanation, no markdown fences.`;
             },
             body: JSON.stringify({
                 model: 'claude-sonnet-4-20250514',
-                max_tokens: 1000,
+                max_tokens: 1024,
                 system: systemPrompt,
-                messages: [{ role: 'user', content: prompt }]
+                messages: this._history
             })
         });
 
@@ -197,7 +212,8 @@ Return ONLY the JSON object, no explanation, no markdown fences.`;
         }
 
         const data = await response.json();
-        const text = data.content?.[0]?.text || '';
-        return JSON.parse(text.replace(/```json|```/g, '').trim());
+        const rawText = data.content?.[0]?.text || '';
+        const cue = JSON.parse(rawText.replace(/```json|```/g, '').trim());
+        return { cue, rawText };
     }
 }
